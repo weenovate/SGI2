@@ -1,0 +1,701 @@
+// SGI - FuENN | Schema Prisma (MySQL)
+//
+// Cubre las entidades del plan de implementación. Todas las tablas
+// usan soft-delete (deletedAt nullable) salvo las inmutables (logs,
+// snapshots, archivos físicos).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum Role {
+  admin
+  bedel
+  manager
+  docente
+  alumno
+}
+
+enum UserStatus {
+  pending // alta sin verificar email
+  active
+  suspended
+}
+
+enum CourseType {
+  completo
+  actualizacion
+  completo_y_actualizacion
+}
+
+enum CourseModality {
+  virtual
+  presencial
+  hibrido
+}
+
+enum EnrollmentStatus {
+  preinscripto
+  validar_pago
+  inscripto
+  rechazado
+  cancelado
+  lista_espera
+}
+
+enum EnrollmentPayer {
+  particular
+  empresa
+}
+
+enum DocumentStatus {
+  pendiente
+  aprobada
+  rechazada
+  vencida
+}
+
+enum DocumentVersionStatus {
+  pendiente
+  aprobada
+  rechazada
+  reemplazada
+}
+
+enum CompanyStatus {
+  approved
+  pending_approval
+  rejected
+}
+
+enum NotificationLevel {
+  info
+  important
+  critical
+}
+
+enum WaitlistOfferStatus {
+  pending
+  accepted
+  rejected
+  expired
+}
+
+enum AttendanceStatus {
+  presente
+  ausente
+  justificado
+  tarde
+}
+
+// ============================================================
+// Auth.js / Usuarios
+// ============================================================
+
+model User {
+  id              String     @id @default(cuid())
+  username        String     @unique
+  email           String     @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String?
+  role            Role
+  status          UserStatus @default(pending)
+  firstName       String?
+  lastName        String?
+  image           String? // ruta interna a FileObject (para foto perfil)
+  lastLoginAt     DateTime?
+  failedAttempts  Int        @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+  deletedBy       String?
+
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+
+  ownedFiles        FileObject[]       @relation("FileOwner")
+  enrollments       Enrollment[]
+  notificationsRead NotificationRead[]
+  auditLogs         AuditLog[]
+  accounts          Account[]
+  sessions          Session[]
+
+  @@index([role])
+  @@index([deletedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  username  String
+  ip        String?
+  success   Boolean
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([username, createdAt])
+  @@index([ip, createdAt])
+}
+
+// ============================================================
+// Perfiles
+// ============================================================
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  docTypeId    String? // FK a TipoDocumentoIdentidad
+  docNumber    String?
+  birthDate    DateTime?
+  nationality  String?
+  titulacionId String?
+  empresaId    String?
+  sindicatoId  String?
+  phone        String?
+
+  // Dirección
+  countryId    String?
+  provinciaId  String?
+  localidadId  String?
+  street       String?
+  streetNumber String?
+  floor        String?
+  unit         String?
+
+  // Foto de perfil derivada del documento "Foto 4x4"
+  fotoDocumentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+
+  @@unique([docTypeId, docNumber])
+  @@index([empresaId])
+}
+
+model TeacherProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  cuit         String    @unique
+  birthDate    DateTime?
+  titulacionId String?
+  phone        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courseInstances CourseInstance[]
+}
+
+// ============================================================
+// Catálogos / Configuración
+// ============================================================
+
+model TipoDocumentoIdentidad {
+  id        String    @id @default(cuid())
+  code      String    @unique // DNI, LC, LE, PAS
+  label     String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model TipoDocumentacion {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  label          String
+  hasExpiry      Boolean   @default(true)
+  isProfilePhoto Boolean   @default(false) // marca para "Foto 4x4"
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  documents Document[]
+}
+
+model EstadoDocumentacion {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  label     String
+  color     String // hex
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+}
+
+model MotivoRechazoDocumentacion {
+  id        String    @id @default(cuid())
+  label     String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+}
+
+model MotivoRechazoInscripcion {
+  id        String    @id @default(cuid())
+  label     String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+}
+
+model Titulacion {
+  id        String    @id @default(cuid())
+  label     String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model Sindicato {
+  id        String    @id @default(cuid())
+  sigla     String    @unique
+  label     String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model CategoriaCurso {
+  id        String    @id @default(cuid())
+  label     String    @unique
+  color     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  courses   Course[]
+}
+
+model Empresa {
+  id                String        @id @default(cuid())
+  name              String        @unique
+  cuit              String?
+  status            CompanyStatus @default(approved)
+  suggestedByUserId String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+}
+
+// Geografía (GeoRef AR + países ISO)
+model Pais {
+  id         String      @id // ISO 3166-1 alpha-3
+  code2      String      @unique // ISO 3166-1 alpha-2
+  name       String
+  provincias Provincia[]
+}
+
+model Provincia {
+  id          String      @id // GeoRef ID
+  paisId      String
+  pais        Pais        @relation(fields: [paisId], references: [id])
+  name        String
+  localidades Localidad[]
+
+  @@index([paisId])
+  @@index([name])
+}
+
+model Localidad {
+  id          String    @id // GeoRef ID
+  provinciaId String
+  provincia   Provincia @relation(fields: [provinciaId], references: [id])
+  name        String
+
+  @@index([provinciaId])
+  @@index([name])
+}
+
+// Configuración global key/value (con categoría para agrupar tabs)
+model Setting {
+  key       String   @id
+  value     Json
+  category  String // 'inscripciones' | 'documentacion' | 'pagos' | 'seguridad' | 'notificaciones' | 'calendario' | 'perfil' | 'auditoria' | 'asistencia' | 'branding'
+  label     String
+  type      String // 'string' | 'integer' | 'boolean' | 'time' | 'select' | 'multiselect' | 'richtext' | 'image'
+  metadata  Json? // opciones adicionales (default, choices, min, max)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+// ============================================================
+// Cursos / Cronograma
+// ============================================================
+
+model Course {
+  id         String          @id @default(cuid())
+  abbr       String          @unique // 3-6 chars, ej. LCI
+  name       String
+  categoryId String?
+  category   CategoriaCurso? @relation(fields: [categoryId], references: [id])
+  objectives String?         @db.Text
+  workload   Int? // horas
+  program    String?         @db.Text
+  imageUrl   String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  deletedAt  DateTime?
+  createdBy  String?
+
+  instances  CourseInstance[]
+  requisites CourseRequisite[]
+
+  @@index([deletedAt])
+}
+
+// Requisitos del curso (HU2-3): qué tipos de doc deben estar aprobadas
+model CourseRequisite {
+  id                  String   @id @default(cuid())
+  courseId            String
+  course              Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tipoDocumentacionId String
+  required            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  @@unique([courseId, tipoDocumentacionId])
+}
+
+model CourseInstance {
+  id               String          @id @default(cuid())
+  courseId         String
+  course           Course          @relation(fields: [courseId], references: [id])
+  edition          Int // 4-5 dígitos
+  type             CourseType
+  modality         CourseModality
+  startDate        DateTime
+  endDate          DateTime
+  startTime        String? // HH:MM
+  teacherId        String?
+  teacher          TeacherProfile? @relation(fields: [teacherId], references: [id])
+  vacancies        Int
+  hoursBeforeClose Int             @default(0) // HU9-1
+  waitlistEnabled  Boolean         @default(false)
+  showVacancies    Boolean         @default(true)
+
+  // Auditables específicos
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?
+  deletedAt DateTime?
+
+  enrollments     Enrollment[]
+  waitlistEntries WaitingListEntry[]
+
+  @@unique([courseId, edition])
+  @@index([startDate])
+  @@index([deletedAt])
+}
+
+// ============================================================
+// Inscripciones
+// ============================================================
+
+model Enrollment {
+  id                String           @id @default(cuid())
+  code              String           @unique // I-LCI5626-018
+  studentId         String
+  student           User             @relation(fields: [studentId], references: [id])
+  instanceId        String
+  instance          CourseInstance   @relation(fields: [instanceId], references: [id])
+  status            EnrollmentStatus @default(preinscripto)
+  payer             EnrollmentPayer
+  empresaId         String?
+  empresaSuggestion String? // si el alumno propone una empresa nueva al inscribirse
+  observed          Boolean          @default(false) // preinscripción observada (HU2-5)
+  notes             String?          @db.Text
+  rechazoMotivoId   String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  snapshots   EnrollmentDocumentSnapshot[]
+  payments    Payment[]
+  attendances Attendance[]
+  grade       Grade?
+
+  @@index([instanceId])
+  @@index([status])
+}
+
+// Snapshot inmutable de la documentación al momento de la inscripción
+model EnrollmentDocumentSnapshot {
+  id                  String     @id @default(cuid())
+  enrollmentId        String
+  enrollment          Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  tipoDocumentacionId String
+  documentId          String? // referencia al Document original (puede haberse borrado)
+  data                Json // metadatos congelados (tipo, vencimiento, etc.)
+  fileObjectIds       String     @db.Text // CSV de FileObject.id snapshotteados
+  takenAt             DateTime   @default(now())
+
+  @@index([enrollmentId])
+}
+
+model WaitingListEntry {
+  id         String         @id @default(cuid())
+  instanceId String
+  instance   CourseInstance @relation(fields: [instanceId], references: [id])
+  studentId  String
+  position   Int
+  createdAt  DateTime       @default(now())
+  removedAt  DateTime?
+
+  offers WaitingListOffer[]
+
+  @@unique([instanceId, studentId])
+  @@index([instanceId, position])
+}
+
+model WaitingListOffer {
+  id        String              @id @default(cuid())
+  entryId   String
+  entry     WaitingListEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  status    WaitlistOfferStatus @default(pending)
+  expiresAt DateTime
+  decidedAt DateTime?
+  createdBy String?
+  createdAt DateTime            @default(now())
+}
+
+// ============================================================
+// Documentación
+// ============================================================
+
+model Document {
+  id                String            @id @default(cuid())
+  studentId         String // StudentProfile.id
+  student           StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tipoId            String
+  tipo              TipoDocumentacion @relation(fields: [tipoId], references: [id])
+  status            DocumentStatus    @default(pendiente)
+  expiresAt         DateTime?
+  expiringSoon      Boolean           @default(false) // tag (no estado)
+  rejectionMotivoId String?
+  rejectionNotes    String?           @db.Text
+  reviewedById      String?
+  reviewedAt        DateTime?
+  uploadedAt        DateTime          @default(now())
+  uploadedById      String?
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  files    DocumentFile[]
+  versions DocumentVersion[]
+
+  @@index([studentId, tipoId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model DocumentFile {
+  id           String     @id @default(cuid())
+  documentId   String
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fileObjectId String
+  fileObject   FileObject @relation(fields: [fileObjectId], references: [id])
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now())
+}
+
+// Histórico inmutable de versiones rechazadas/anteriores
+model DocumentVersion {
+  id            String                @id @default(cuid())
+  documentId    String
+  document      Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status        DocumentVersionStatus
+  data          Json
+  fileObjectIds String                @db.Text // CSV de FileObject ids
+  archivedAt    DateTime              @default(now())
+}
+
+// ============================================================
+// Pagos / Comprobantes
+// ============================================================
+
+model Payment {
+  id              String     @id @default(cuid())
+  enrollmentId    String
+  enrollment      Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  fileObjectId    String
+  fileObject      FileObject @relation(fields: [fileObjectId], references: [id])
+  medio           String? // medio de pago (transferencia, mp, etc.) extraído por OCR
+  fechaPago       DateTime?
+  monto           Decimal?   @db.Decimal(12, 2)
+  numeroOperacion String?
+  ocrText         String?    @db.Text
+  ocrScore        Int? // 0-100
+  reviewedById    String?
+  reviewedAt      DateTime?
+  approved        Boolean    @default(false)
+  rejectedReason  String?    @db.Text
+  uploadedAt      DateTime   @default(now())
+  deletedAt       DateTime?
+
+  @@index([enrollmentId])
+}
+
+// ============================================================
+// Notificaciones
+// ============================================================
+
+model Notification {
+  id          String            @id @default(cuid())
+  title       String
+  body        String            @db.Text
+  level       NotificationLevel @default(info)
+  expiresAt   DateTime?
+  audience    Json // { roles: ['alumno'], userIds: [...], all: false }
+  createdById String?
+  createdAt   DateTime          @default(now())
+  deletedAt   DateTime?
+
+  reads NotificationRead[]
+
+  @@index([expiresAt])
+}
+
+model NotificationRead {
+  id             String       @id @default(cuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@unique([notificationId, userId])
+}
+
+// ============================================================
+// Asistencia y Calificaciones (Sprint 7)
+// ============================================================
+
+model ClassSession {
+  id         String   @id @default(cuid())
+  instanceId String
+  date       DateTime
+  topic      String?
+  createdAt  DateTime @default(now())
+
+  attendances Attendance[]
+
+  @@index([instanceId, date])
+}
+
+model Attendance {
+  id             String           @id @default(cuid())
+  classSessionId String
+  classSession   ClassSession     @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  enrollmentId   String
+  enrollment     Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status         AttendanceStatus @default(presente)
+  notes          String?          @db.Text
+  recordedAt     DateTime         @default(now())
+  recordedBy     String?
+
+  @@unique([classSessionId, enrollmentId])
+}
+
+model Grade {
+  id           String     @id @default(cuid())
+  enrollmentId String     @unique
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  score        Decimal?   @db.Decimal(5, 2)
+  approved     Boolean?
+  notes        String?    @db.Text
+  recordedAt   DateTime   @default(now())
+  recordedBy   String?
+}
+
+// ============================================================
+// Archivos físicos (servidor /api/files)
+// ============================================================
+
+model FileObject {
+  id           String   @id @default(cuid())
+  bucket       String // 'documents' | 'payments' | 'branding' | 'tmp'
+  relPath      String   @unique
+  originalName String
+  mime         String
+  size         Int
+  ownerUserId  String?
+  owner        User?    @relation("FileOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  documentFiles DocumentFile[]
+  payments      Payment[]
+}
+
+// ============================================================
+// Auditoría
+// ============================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ip        String?
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@index([action])
+}
