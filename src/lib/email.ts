@@ -41,11 +41,15 @@ export async function sendEmail(msg: EmailMessage) {
 }
 
 export function renderBaseTemplate(opts: { title: string; bodyHtml: string }) {
+  const logoUrl = `${env.APP_URL}/branding/logo.png`;
   return `<!doctype html>
 <html lang="es">
 <head><meta charset="utf-8" /><title>${escape(opts.title)}</title></head>
 <body style="font-family: system-ui, -apple-system, Segoe UI, sans-serif; background:#f5f7fa; padding:24px;">
   <div style="max-width:600px; margin:auto; background:#fff; border-radius:8px; padding:24px; border:1px solid #e2e8f0;">
+    <div style="margin-bottom:16px;">
+      <img src="${logoUrl}" alt="FuENN" height="40" style="height:40px; width:auto; display:block;" />
+    </div>
     <h1 style="font-size:18px; margin:0 0 16px; color:#0f172a;">${escape(opts.title)}</h1>
     ${opts.bodyHtml}
     <hr style="border:none; border-top:1px solid #e2e8f0; margin:24px 0;" />

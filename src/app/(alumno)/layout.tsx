@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default async function AlumnoLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -10,8 +11,11 @@ export default async function AlumnoLayout({ children }: { children: React.React
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="border-b bg-white">
-        <div className="container mx-auto h-14 flex items-center justify-between">
-          <Link href="/calendario" className="font-semibold text-primary">SGI · Mi cuenta</Link>
+        <div className="container mx-auto h-16 flex items-center justify-between">
+          <Link href="/calendario" className="flex items-center gap-3" aria-label="FuENN">
+            <BrandLogo height={36} />
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Mi cuenta</span>
+          </Link>
           <nav className="flex items-center gap-4 text-sm">
             <Link href="/calendario" className="hover:underline">Calendario</Link>
             <Link href="/mis-inscripciones" className="hover:underline">Mis inscripciones</Link>
