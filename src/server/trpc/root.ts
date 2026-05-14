@@ -21,6 +21,8 @@ import { companiesRouter } from "./routers/companies";
 import { settingsRouter } from "./routers/settings";
 import { auditRouter } from "./routers/audit";
 import { geoRouter } from "./routers/geo";
+import { notificationsRouter } from "./routers/notifications";
+import { dashboardsRouter } from "./routers/dashboards";
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({ ok: true, ts: new Date().toISOString() })),
@@ -48,6 +50,8 @@ export const appRouter = router({
   settings: settingsRouter,
   audit: auditRouter,
   geo: geoRouter,
+  notifications: notificationsRouter,
+  dashboards: dashboardsRouter,
 });
 
 export type AppRouter = typeof appRouter;

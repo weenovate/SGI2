@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
+import { NotificationsBell } from "@/components/notifications-bell";
 
 export default async function BackofficeLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -46,18 +47,21 @@ export default async function BackofficeLayout({ children }: { children: React.R
               {session?.user?.name ?? "Sin sesión"}
               {session?.user?.role ? ` · ${session.user.role}` : ""}
             </span>
-            {session?.user && (
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/login" });
-                }}
-              >
-                <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
-                  Salir
-                </button>
-              </form>
-            )}
+            <div className="flex items-center gap-2">
+              <NotificationsBell />
+              {session?.user && (
+                <form
+                  action={async () => {
+                    "use server";
+                    await signOut({ redirectTo: "/login" });
+                  }}
+                >
+                  <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
+                    Salir
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </header>
         <main className="flex-1 p-6">{children}</main>

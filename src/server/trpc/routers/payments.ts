@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, roleProcedure, protectedProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
+import { notifyPaymentDecision } from "@/server/services/notifications";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -127,6 +128,7 @@ export const paymentsRouter = router({
         action: "approve", entity: "Payment", entityId: input.id,
         before, after: updated,
       });
+      await notifyPaymentDecision(input.id, "approved").catch((err) => console.error("[pay.approve.notify]", err));
       return updated;
     }),
 
@@ -148,6 +150,7 @@ export const paymentsRouter = router({
         action: "reject", entity: "Payment", entityId: input.id,
         before, after: updated,
       });
+      await notifyPaymentDecision(input.id, "rejected").catch((err) => console.error("[pay.reject.notify]", err));
       return updated;
     }),
 

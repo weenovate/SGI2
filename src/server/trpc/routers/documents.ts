@@ -4,6 +4,7 @@ import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
 import { deleteFile, readBuffer } from "@/lib/storage";
 import { analyzeDocumentBuffer } from "@/server/services/document-ocr";
+import { notifyDocumentDecision } from "@/server/services/notifications";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -257,6 +258,7 @@ export const documentsRouter = router({
       }
 
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "approve", entity: "Document", entityId: input.id, before, after: updated });
+      await notifyDocumentDecision(input.id, "aprobada").catch((err) => console.error("[doc.approve.notify]", err));
       return updated;
     }),
 
@@ -281,6 +283,7 @@ export const documentsRouter = router({
         },
       });
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "reject", entity: "Document", entityId: input.id, before, after: updated });
+      await notifyDocumentDecision(input.id, "rechazada").catch((err) => console.error("[doc.reject.notify]", err));
       return updated;
     }),
 

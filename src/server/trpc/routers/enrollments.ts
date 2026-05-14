@@ -6,6 +6,7 @@ import { sendEmail, renderBaseTemplate } from "@/lib/email";
 import { env } from "@/lib/env";
 import { computeRequirements, snapshotEnrollmentDocs } from "@/server/services/requirements";
 import { generateEnrollmentCode } from "@/server/services/enrollment-code";
+import { notifyEnrollmentCreated, notifyEnrollmentStatusChanged } from "@/server/services/notifications";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -169,6 +170,7 @@ export const enrollmentsRouter = router({
       });
 
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "create", entity: "Enrollment", entityId: result.id, after: result });
+      await notifyEnrollmentCreated(result.id).catch((err) => console.error("[enroll.notify]", err));
       return result;
     }),
 
@@ -309,6 +311,7 @@ export const enrollmentsRouter = router({
       }
       const updated = await ctx.db.enrollment.update({ where: { id: input.id }, data: { status: nextStatus } });
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "approve", entity: "Enrollment", entityId: input.id, before, after: updated });
+      await notifyEnrollmentStatusChanged(input.id, nextStatus).catch((err) => console.error("[approve.notify]", err));
       return updated;
     }),
 
@@ -321,6 +324,7 @@ export const enrollmentsRouter = router({
         data: { status: "rechazado", rechazoMotivoId: input.motivoId, notes: input.notes ?? null },
       });
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "reject", entity: "Enrollment", entityId: input.id, before, after: updated });
+      await notifyEnrollmentStatusChanged(input.id, "rechazado").catch((err) => console.error("[reject.notify]", err));
       return updated;
     }),
 
