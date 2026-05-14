@@ -10,6 +10,9 @@ import {
 } from "./routers/catalogs";
 import { coursesRouter } from "./routers/courses";
 import { instancesRouter } from "./routers/instances";
+import { studentsRouter } from "./routers/students";
+import { documentsRouter } from "./routers/documents";
+import { registrationRouter } from "./routers/registration";
 import { teachersRouter } from "./routers/teachers";
 import { usersRouter } from "./routers/users";
 import { companiesRouter } from "./routers/companies";
@@ -33,6 +36,9 @@ export const appRouter = router({
   courses: coursesRouter,
   instances: instancesRouter,
   teachers: teachersRouter,
+  students: studentsRouter,
+  documents: documentsRouter,
+  registration: registrationRouter,
   users: usersRouter,
   companies: companiesRouter,
   settings: settingsRouter,

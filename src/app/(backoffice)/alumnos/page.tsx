@@ -1,8 +1,10 @@
-export default function AlumnosPage() {
-  return (
-    <section>
-      <h1 className="text-2xl font-semibold mb-2">Alumnos</h1>
-      <p className="text-muted-foreground">CRUD de alumnos (HU10). Implementado en Sprint 3.</p>
-    </section>
-  );
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { StudentsBackoffice } from "./students-view";
+
+export default async function Page() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  if (!["admin", "bedel"].includes(session.user.role)) redirect("/dashboard");
+  return <StudentsBackoffice canRestore={session.user.role === "admin"} />;
 }

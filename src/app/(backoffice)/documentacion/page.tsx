@@ -1,8 +1,10 @@
-export default function DocumentacionPage() {
-  return (
-    <section>
-      <h1 className="text-2xl font-semibold mb-2">Documentación</h1>
-      <p className="text-muted-foreground">HU11. Implementado en Sprint 3.</p>
-    </section>
-  );
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { DocsBackoffice } from "./docs-view";
+
+export default async function Page() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  if (!["admin", "bedel"].includes(session.user.role)) redirect("/dashboard");
+  return <DocsBackoffice />;
 }

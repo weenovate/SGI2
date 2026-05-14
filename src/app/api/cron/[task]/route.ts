@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { markExpiringSoon, markExpired } from "@/server/jobs/document-expiry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,12 +28,17 @@ export async function POST(
   const { task } = await context.params;
 
   switch (task) {
-    case "documents.markExpiringSoon":
-    case "documents.markExpired":
+    case "documents.markExpiringSoon": {
+      const r = await markExpiringSoon();
+      return NextResponse.json({ task, ...r });
+    }
+    case "documents.markExpired": {
+      const r = await markExpired();
+      return NextResponse.json({ task, ...r });
+    }
     case "enrollments.closeWindow":
     case "waitlist.expireOffers":
     case "notifications.expire":
-      // Stubs: implementadas en sprints 3-6.
       return NextResponse.json({ task, status: "noop", note: "Handler aún no implementado" });
     default:
       return NextResponse.json({ error: "Unknown task" }, { status: 400 });

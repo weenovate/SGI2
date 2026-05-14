@@ -1,11 +1,18 @@
+import { RegisterForm } from "./register-form";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 export default function RegistroPage() {
   return (
-    <section className="max-w-md mx-auto">
-      <h1 className="text-2xl font-semibold mb-2">Registro de alumno</h1>
-      <p className="text-muted-foreground">
-        Registro abierto solo para rol Alumno. Se implementa en Sprint 3 con
-        verificación de email.
-      </p>
+    <section className="max-w-lg mx-auto py-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Registro de alumno</CardTitle>
+          <CardDescription>Solo alumnos pueden registrarse desde acá. Vas a recibir un email para verificar la cuenta.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RegisterForm />
+        </CardContent>
+      </Card>
     </section>
   );
 }
