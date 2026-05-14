@@ -3,10 +3,24 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { saveFile, StorageError } from "@/lib/storage";
 import { evaluateImageQuality } from "@/lib/ocr";
+import { extractPaymentDataFromBuffer } from "@/server/services/payment-ocr";
+import { analyzeDocumentBuffer } from "@/server/services/document-ocr";
 
 export const runtime = "nodejs";
 
 const ALLOWED = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+
+type UploadEntry = {
+  id: string;
+  relPath: string;
+  mime: string;
+  originalName: string;
+  size: number;
+  warning?: string;
+  quality?: Awaited<ReturnType<typeof evaluateImageQuality>> | null;
+  paymentOcr?: Awaited<ReturnType<typeof extractPaymentDataFromBuffer>>;
+  documentOcr?: Awaited<ReturnType<typeof analyzeDocumentBuffer>>;
+};
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -14,12 +28,13 @@ export async function POST(req: NextRequest) {
 
   const url = new URL(req.url);
   const bucket = (url.searchParams.get("bucket") ?? "documents") as "documents" | "payments" | "branding";
+  const tipoCode = url.searchParams.get("tipoCode") ?? null;
   const evaluate = url.searchParams.get("evaluate") !== "false";
+  const runOcr = url.searchParams.get("ocr") !== "false";
 
   const formData = await req.formData();
   const files = formData.getAll("files");
 
-  // Tomar configuracion vigente
   const [maxSizeRow, allowedRow, minScoreRow] = await Promise.all([
     db.setting.findUnique({ where: { key: bucket === "payments" ? "payments.maxFileSizeMb" : "documents.maxFileSizeMb" } }),
     db.setting.findUnique({ where: { key: bucket === "payments" ? "payments.allowedMimes" : "documents.allowedMimes" } }),
@@ -29,7 +44,7 @@ export async function POST(req: NextRequest) {
   const allowedMimes = Array.isArray(allowedRow?.value) ? (allowedRow.value as string[]) : Array.from(ALLOWED);
   const minScore = typeof minScoreRow?.value === "number" ? minScoreRow.value : 0;
 
-  const out: Array<{ id: string; warning?: string; quality?: unknown; relPath: string; mime: string; originalName: string; size: number }> = [];
+  const out: UploadEntry[] = [];
 
   for (const f of files) {
     if (!(f instanceof File)) continue;
@@ -55,6 +70,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    let paymentOcr: Awaited<ReturnType<typeof extractPaymentDataFromBuffer>> | undefined;
+    let documentOcr: Awaited<ReturnType<typeof analyzeDocumentBuffer>> | undefined;
+
+    if (runOcr) {
+      try {
+        if (bucket === "payments") {
+          paymentOcr = await extractPaymentDataFromBuffer(buffer);
+        } else if (bucket === "documents" && tipoCode) {
+          documentOcr = await analyzeDocumentBuffer({ buffer, mime: f.type, expectedTipoCode: tipoCode });
+        }
+      } catch (err) {
+        console.error("[upload] OCR failed", err);
+      }
+    }
+
     try {
       const saved = await saveFile({ bucket, filename: f.name, mime: f.type, buffer, maxBytes });
       const fo = await db.fileObject.create({
@@ -67,7 +97,17 @@ export async function POST(req: NextRequest) {
           ownerUserId: session.user.id,
         },
       });
-      out.push({ id: fo.id, relPath: fo.relPath, mime: fo.mime, originalName: fo.originalName, size: fo.size, quality, warning });
+      out.push({
+        id: fo.id,
+        relPath: fo.relPath,
+        mime: fo.mime,
+        originalName: fo.originalName,
+        size: fo.size,
+        quality,
+        warning,
+        paymentOcr,
+        documentOcr,
+      });
     } catch (err) {
       if (err instanceof StorageError) {
         return NextResponse.json({ error: err.message }, { status: 400 });

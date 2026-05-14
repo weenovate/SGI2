@@ -1,12 +1,13 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="border-b bg-white">
-        <div className="container mx-auto h-14 flex items-center justify-between">
-          <Link href="/calendario" className="font-semibold text-primary">
-            SGI · FuENN
+        <div className="container mx-auto h-16 flex items-center justify-between">
+          <Link href="/calendario" className="flex items-center" aria-label="FuENN — inicio">
+            <BrandLogo height={36} />
           </Link>
           <nav className="text-sm flex items-center gap-4">
             <Link href="/calendario" className="hover:underline">Calendario</Link>

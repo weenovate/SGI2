@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, roleProcedure, protectedProcedure } from "../trpc";
+import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
-import { deleteFile } from "@/lib/storage";
+import { deleteFile, readBuffer } from "@/lib/storage";
+import { analyzeDocumentBuffer } from "@/server/services/document-ocr";
+import { notifyDocumentDecision } from "@/server/services/notifications";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -45,21 +47,55 @@ export const documentsRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Archivos inválidos" });
       }
 
+      // HU4-3 / HU11-2: corremos OCR sobre el primer archivo y aplicamos
+      // autovalidación si el setting global está activo y el resultado es bueno.
+      const autoValidateRow = await ctx.db.setting.findUnique({ where: { key: "enrollment.autoValidateDocs" } });
+      const minScoreRow = await ctx.db.setting.findUnique({ where: { key: "documents.minOcrScore" } });
+      const autoValidate = autoValidateRow?.value === true;
+      const minScore = typeof minScoreRow?.value === "number" ? minScoreRow.value : 60;
+
+      let initialStatus: "pendiente" | "aprobada" = "pendiente";
+      let inferredExpiresAt: Date | null | undefined = input.expiresAt;
+      let autoNote: string | null = null;
+
+      if (autoValidate && !tipo.isProfilePhoto) {
+        try {
+          const first = files[0]!;
+          const buf = await readBuffer(first.relPath);
+          const ocr = await analyzeDocumentBuffer({ buffer: buf, mime: first.mime, expectedTipoCode: tipo.code });
+          if (tipo.hasExpiry && ocr.expiresAt && !inferredExpiresAt) {
+            inferredExpiresAt = ocr.expiresAt;
+          }
+          if (ocr.typeMatched && ocr.score >= minScore) {
+            initialStatus = "aprobada";
+            autoNote = `Validación automática (score ${ocr.score})`;
+          } else {
+            autoNote = `OCR score ${ocr.score}, typeMatched=${ocr.typeMatched} — requiere revisión manual`;
+          }
+        } catch (err) {
+          console.error("[documents.myCreate] OCR failed", err);
+        }
+      }
+
       const created = await ctx.db.document.create({
         data: {
           studentId: profile.id,
           tipoId: tipo.id,
-          status: "pendiente",
-          expiresAt: tipo.hasExpiry ? input.expiresAt ?? null : null,
+          status: initialStatus,
+          expiresAt: tipo.hasExpiry ? inferredExpiresAt ?? null : null,
           uploadedById: ctx.session.user.id,
+          ...(initialStatus === "aprobada"
+            ? { reviewedAt: new Date(), reviewedById: ctx.session.user.id, rejectionNotes: autoNote }
+            : autoNote
+              ? { rejectionNotes: autoNote }
+              : {}),
           files: {
             create: input.fileObjectIds.map((fileObjectId, i) => ({ fileObjectId, position: i })),
           },
         },
       });
 
-      // Si es Foto 4x4 y se aprueba, después actualizamos el avatar del user.
-      // Por ahora solo dejamos referencia para hidratar al aprobar.
+      // Si es Foto 4x4, dejamos la referencia. La aprobación humana mueve el avatar.
       if (tipo.isProfilePhoto) {
         await ctx.db.studentProfile.update({
           where: { id: profile.id },
@@ -67,7 +103,14 @@ export const documentsRouter = router({
         });
       }
 
-      await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "create", entity: "Document", entityId: created.id, after: { tipo: tipo.code, files: input.fileObjectIds.length } });
+      await audit({
+        userId: ctx.session.user.id,
+        ip: ctx.ip,
+        action: "create",
+        entity: "Document",
+        entityId: created.id,
+        after: { tipo: tipo.code, files: input.fileObjectIds.length, status: initialStatus, autoNote },
+      });
       return created;
     }),
 
@@ -215,6 +258,7 @@ export const documentsRouter = router({
       }
 
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "approve", entity: "Document", entityId: input.id, before, after: updated });
+      await notifyDocumentDecision(input.id, "aprobada").catch((err) => console.error("[doc.approve.notify]", err));
       return updated;
     }),
 
@@ -239,6 +283,7 @@ export const documentsRouter = router({
         },
       });
       await audit({ userId: ctx.session.user.id, ip: ctx.ip, action: "reject", entity: "Document", entityId: input.id, before, after: updated });
+      await notifyDocumentDecision(input.id, "rechazada").catch((err) => console.error("[doc.reject.notify]", err));
       return updated;
     }),
 

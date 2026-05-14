@@ -1,6 +1,7 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Clock, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,6 +165,11 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
                 <TableCell className="text-right">
                   {!deleted && (
                     <>
+                      {it.waitlistEnabled && (
+                        <Link href={`/cronograma/${it.id}/lista-espera`}>
+                          <Button variant="ghost" size="icon" title="Lista de espera"><Clock className="h-4 w-4" /></Button>
+                        </Link>
+                      )}
                       <Button variant="ghost" size="icon" onClick={() => { setEditingId(it.id); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => { if (confirm("¿Eliminar instancia?")) del.mutate({ id: it.id }); }}><Trash2 className="h-4 w-4" /></Button>
                     </>

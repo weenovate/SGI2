@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { EnrollmentsView } from "./enrollments-view";
+import { EnrollmentDetail } from "./enrollment-detail";
 
-export default async function Page() {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!["admin", "bedel"].includes(session.user.role)) redirect("/dashboard");
-  return <EnrollmentsView />;
+  const { id } = await params;
+  return <EnrollmentDetail id={id} />;
 }

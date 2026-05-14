@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import { markExpiringSoon, markExpired } from "@/server/jobs/document-expiry";
+import { closeWindow, expireOffers } from "@/server/jobs/enrollment-jobs";
+import { expireNotifications } from "@/server/jobs/notifications-expire";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,10 +38,18 @@ export async function POST(
       const r = await markExpired();
       return NextResponse.json({ task, ...r });
     }
-    case "enrollments.closeWindow":
-    case "waitlist.expireOffers":
-    case "notifications.expire":
-      return NextResponse.json({ task, status: "noop", note: "Handler aún no implementado" });
+    case "enrollments.closeWindow": {
+      const r = await closeWindow();
+      return NextResponse.json({ task, ...r });
+    }
+    case "waitlist.expireOffers": {
+      const r = await expireOffers();
+      return NextResponse.json({ task, ...r });
+    }
+    case "notifications.expire": {
+      const r = await expireNotifications();
+      return NextResponse.json({ task, ...r });
+    }
     default:
       return NextResponse.json({ error: "Unknown task" }, { status: 400 });
   }

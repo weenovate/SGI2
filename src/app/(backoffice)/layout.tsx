@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
+import { BrandLogo } from "@/components/brand-logo";
+import { NotificationsBell } from "@/components/notifications-bell";
 
 export default async function BackofficeLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -15,19 +17,25 @@ export default async function BackofficeLayout({ children }: { children: React.R
   return (
     <div className="min-h-dvh flex">
       <aside className="w-60 border-r bg-slate-50 p-4 hidden md:block">
-        <Link href="/dashboard" className="block font-semibold text-primary mb-6">
-          SGI · Backoffice
+        <Link href="/dashboard" className="flex items-center gap-2 mb-6" aria-label="FuENN">
+          <BrandLogo height={32} />
         </Link>
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-4">Backoffice</p>
         <nav className="text-sm space-y-1">
           <NavLink href="/dashboard" label="Dashboard" />
-          <NavLink href="/cronograma" label="Cronograma" />
-          <NavLink href="/cursos" label="Cursos" />
-          <NavLink href="/docentes" label="Docentes" />
-          <NavLink href="/alumnos" label="Alumnos" />
-          <NavLink href="/inscripciones" label="Inscripciones" />
-          <NavLink href="/documentacion" label="Documentación" />
-          <NavLink href="/empresas" label="Empresas" />
-          <NavLink href="/catalogos" label="Catálogos" />
+          {role === "docente" && <NavLink href="/mis-cursos" label="Mis cursos" />}
+          {role !== "docente" && (
+            <>
+              <NavLink href="/cronograma" label="Cronograma" />
+              <NavLink href="/cursos" label="Cursos" />
+              <NavLink href="/docentes" label="Docentes" />
+              <NavLink href="/alumnos" label="Alumnos" />
+              <NavLink href="/inscripciones" label="Inscripciones" />
+              <NavLink href="/documentacion" label="Documentación" />
+              <NavLink href="/empresas" label="Empresas" />
+              <NavLink href="/catalogos" label="Catálogos" />
+            </>
+          )}
           {role === "admin" && (
             <>
               <NavLink href="/usuarios" label="Usuarios" />
@@ -44,18 +52,21 @@ export default async function BackofficeLayout({ children }: { children: React.R
               {session?.user?.name ?? "Sin sesión"}
               {session?.user?.role ? ` · ${session.user.role}` : ""}
             </span>
-            {session?.user && (
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/login" });
-                }}
-              >
-                <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
-                  Salir
-                </button>
-              </form>
-            )}
+            <div className="flex items-center gap-2">
+              <NotificationsBell />
+              {session?.user && (
+                <form
+                  action={async () => {
+                    "use server";
+                    await signOut({ redirectTo: "/login" });
+                  }}
+                >
+                  <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
+                    Salir
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </header>
         <main className="flex-1 p-6">{children}</main>

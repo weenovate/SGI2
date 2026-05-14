@@ -13,12 +13,18 @@ import { instancesRouter } from "./routers/instances";
 import { studentsRouter } from "./routers/students";
 import { documentsRouter } from "./routers/documents";
 import { registrationRouter } from "./routers/registration";
+import { enrollmentsRouter } from "./routers/enrollments";
+import { paymentsRouter } from "./routers/payments";
 import { teachersRouter } from "./routers/teachers";
 import { usersRouter } from "./routers/users";
 import { companiesRouter } from "./routers/companies";
 import { settingsRouter } from "./routers/settings";
 import { auditRouter } from "./routers/audit";
 import { geoRouter } from "./routers/geo";
+import { notificationsRouter } from "./routers/notifications";
+import { dashboardsRouter } from "./routers/dashboards";
+import { classesRouter } from "./routers/classes";
+import { gradesRouter } from "./routers/grades";
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({ ok: true, ts: new Date().toISOString() })),
@@ -39,11 +45,17 @@ export const appRouter = router({
   students: studentsRouter,
   documents: documentsRouter,
   registration: registrationRouter,
+  enrollments: enrollmentsRouter,
+  payments: paymentsRouter,
   users: usersRouter,
   companies: companiesRouter,
   settings: settingsRouter,
   audit: auditRouter,
   geo: geoRouter,
+  notifications: notificationsRouter,
+  dashboards: dashboardsRouter,
+  classes: classesRouter,
+  grades: gradesRouter,
 });
 
 export type AppRouter = typeof appRouter;
