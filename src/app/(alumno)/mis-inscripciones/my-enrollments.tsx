@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, Upload, X } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const statusVariant: Record<string, "default" | "secondary" | "warning" | "success" | "destructive" | "info" | "outline"> = {
@@ -34,6 +35,7 @@ export function MyEnrollments() {
   const cancel = api.enrollments.cancel.useMutation({ onSuccess: () => utils.enrollments.myList.invalidate() });
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [payOpen, setPayOpen] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return (list.data ?? []).filter((e) => {
@@ -98,6 +100,11 @@ export function MyEnrollments() {
                   <TableCell>{new Date(e.instance.endDate).toLocaleDateString("es-AR")}</TableCell>
                   <TableCell><Badge variant={statusVariant[e.status]}>{statusLabel[e.status]}</Badge></TableCell>
                   <TableCell className="text-right">
+                    {e.status === "validar_pago" && (
+                      <Button size="sm" variant="outline" onClick={() => setPayOpen(e.id)}>
+                        <Upload className="h-4 w-4" /> Subir comprobante
+                      </Button>
+                    )}
                     {(e.status === "preinscripto" || e.status === "validar_pago") && (
                       <Button size="sm" variant="ghost" onClick={async () => {
                         if (!confirm("¿Cancelar inscripción?")) return;
@@ -114,6 +121,151 @@ export function MyEnrollments() {
           </Table>
         </CardContent>
       </Card>
+
+      {payOpen && (
+        <PaymentDialog
+          enrollmentId={payOpen}
+          onClose={() => setPayOpen(null)}
+          onDone={() => { setPayOpen(null); utils.enrollments.myList.invalidate(); }}
+        />
+      )}
     </div>
+  );
+}
+
+type OcrPaymentResult = {
+  medio: string | null;
+  fechaPago: string | null;
+  monto: string | null;
+  numeroOperacion: string | null;
+  score: number;
+  rawText: string;
+};
+
+function PaymentDialog({ enrollmentId, onClose, onDone }: { enrollmentId: string; onClose: () => void; onDone: () => void }) {
+  const state = api.payments.inscripcionState.useQuery({ enrollmentId });
+  const myPays = api.payments.myList.useQuery({ enrollmentId });
+  const create = api.payments.myCreate.useMutation();
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [file, setFile] = useState<{ id: string; originalName: string } | null>(null);
+  const [ocr, setOcr] = useState<OcrPaymentResult | null>(null);
+  const [form, setForm] = useState({ medio: "", fechaPago: "", monto: "", numeroOperacion: "" });
+
+  async function handleUpload(files: FileList) {
+    setBusy(true); setError(null);
+    try {
+      const fd = new FormData();
+      Array.from(files).forEach((f) => fd.append("files", f));
+      const res = await fetch("/api/upload?bucket=payments", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      const j = (await res.json()) as { files: Array<{ id: string; originalName: string; paymentOcr?: OcrPaymentResult }> };
+      const f = j.files[0];
+      if (!f) throw new Error("Sin archivo");
+      setFile({ id: f.id, originalName: f.originalName });
+      if (f.paymentOcr) {
+        setOcr(f.paymentOcr);
+        setForm({
+          medio: f.paymentOcr.medio ?? "",
+          fechaPago: f.paymentOcr.fechaPago ? new Date(f.paymentOcr.fechaPago).toISOString().slice(0, 10) : "",
+          monto: f.paymentOcr.monto ?? "",
+          numeroOperacion: f.paymentOcr.numeroOperacion ?? "",
+        });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Subir comprobante de pago</DialogTitle>
+          <DialogDescription>
+            {state.data?.canUpload ? "Subí el comprobante (PDF/JPG/PNG hasta 10 MB). Vamos a pre-leer los datos con OCR." : "Esta inscripción no admite carga de comprobante en este momento."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {state.data?.bankInfo && (state.data.bankInfo as { cbu?: string; alias?: string; titular?: string }).cbu && (
+          <div className="text-xs border rounded-md p-2 bg-slate-50">
+            <p className="font-medium mb-1">Datos para transferencia:</p>
+            <p>CBU: {(state.data.bankInfo as { cbu?: string }).cbu}</p>
+            <p>Alias: {(state.data.bankInfo as { alias?: string }).alias}</p>
+            <p>Titular: {(state.data.bankInfo as { titular?: string }).titular}</p>
+          </div>
+        )}
+
+        <div>
+          <Label>Archivo</Label>
+          <input
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            disabled={busy || !state.data?.canUpload}
+            onChange={(e) => e.target.files && handleUpload(e.target.files)}
+          />
+          {file && <p className="text-xs text-muted-foreground mt-1">Cargado: {file.originalName}</p>}
+        </div>
+
+        {file && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="col-span-2">
+              <Label>Medio de pago</Label>
+              <Input value={form.medio} onChange={(e) => setForm({ ...form, medio: e.target.value })} placeholder="Transferencia, Mercado Pago, etc." />
+            </div>
+            <div><Label>Fecha</Label><Input type="date" value={form.fechaPago} onChange={(e) => setForm({ ...form, fechaPago: e.target.value })} /></div>
+            <div><Label>Monto</Label><Input value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} placeholder="0.00" /></div>
+            <div className="col-span-2"><Label>Nº de operación</Label><Input value={form.numeroOperacion} onChange={(e) => setForm({ ...form, numeroOperacion: e.target.value })} /></div>
+            {ocr && (
+              <p className="col-span-2 text-xs text-muted-foreground">OCR score: {ocr.score}/100. Revisá y corregí lo que haga falta.</p>
+            )}
+          </div>
+        )}
+
+        {myPays.data && myPays.data.length > 0 && (
+          <div className="border-t pt-2 text-xs">
+            <p className="font-medium">Comprobantes ya enviados:</p>
+            <ul>
+              {myPays.data.map((p) => (
+                <li key={p.id}>
+                  {new Date(p.uploadedAt).toLocaleString("es-AR")} — {p.approved ? "✅ Aprobado" : p.rejectedReason ? `❌ ${p.rejectedReason}` : "⏳ Pendiente"}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button
+            disabled={!file || busy || create.isPending}
+            onClick={async () => {
+              if (!file) return;
+              try {
+                await create.mutateAsync({
+                  enrollmentId,
+                  fileObjectId: file.id,
+                  medio: form.medio || null,
+                  fechaPago: form.fechaPago ? new Date(form.fechaPago) : null,
+                  monto: form.monto || null,
+                  numeroOperacion: form.numeroOperacion || null,
+                  ocrText: ocr?.rawText ?? null,
+                  ocrScore: ocr?.score ?? null,
+                });
+                onDone();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Error");
+              }
+            }}
+          >
+            {create.isPending ? "Enviando…" : "Enviar comprobante"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
