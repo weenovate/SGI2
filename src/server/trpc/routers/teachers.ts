@@ -7,6 +7,7 @@ import { sendEmail, renderBaseTemplate } from "@/lib/email";
 import { env } from "@/lib/env";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
+const onlyDocente = () => roleProcedure("docente");
 
 function generatePassword(len = 12) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
@@ -22,6 +23,72 @@ function normalizeCuit(cuit: string) {
 }
 
 export const teachersRouter = router({
+  // ---- Vista docente ----
+  me: onlyDocente().query(async ({ ctx }) => {
+    return ctx.db.teacherProfile.findUnique({
+      where: { userId: ctx.session.user.id },
+      include: { user: true },
+    });
+  }),
+
+  myInstances: onlyDocente()
+    .input(
+      z
+        .object({
+          includePast: z.boolean().default(false),
+          q: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const profile = await ctx.db.teacherProfile.findUniqueOrThrow({ where: { userId: ctx.session.user.id } });
+      return ctx.db.courseInstance.findMany({
+        where: {
+          teacherId: profile.id,
+          deletedAt: null,
+          ...(input?.includePast ? {} : { endDate: { gte: new Date() } }),
+          ...(input?.q
+            ? {
+                OR: [
+                  { course: { name: { contains: input.q } } },
+                  { course: { abbr: { contains: input.q } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          course: { include: { category: true } },
+          _count: { select: { enrollments: { where: { status: "inscripto" } } } },
+        },
+        orderBy: { startDate: "asc" },
+      });
+    }),
+
+  alumnosForInstance: roleProcedure("docente", "admin", "bedel")
+    .input(z.object({ instanceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Si es docente, validar que la instancia sea propia
+      if (ctx.session.user.role === "docente") {
+        const profile = await ctx.db.teacherProfile.findUniqueOrThrow({ where: { userId: ctx.session.user.id } });
+        const inst = await ctx.db.courseInstance.findUnique({ where: { id: input.instanceId } });
+        if (!inst || inst.teacherId !== profile.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+      return ctx.db.enrollment.findMany({
+        where: {
+          instanceId: input.instanceId,
+          status: "inscripto",
+          deletedAt: null,
+        },
+        include: {
+          student: { include: { studentProfile: true } },
+          grade: true,
+        },
+        orderBy: { student: { lastName: "asc" } },
+      });
+    }),
+
   list: adminOrBedel()
     .input(z.object({ q: z.string().optional(), includeDeleted: z.boolean().default(false) }).optional())
     .query(({ ctx, input }) =>

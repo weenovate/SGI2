@@ -23,14 +23,19 @@ export default async function BackofficeLayout({ children }: { children: React.R
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-4">Backoffice</p>
         <nav className="text-sm space-y-1">
           <NavLink href="/dashboard" label="Dashboard" />
-          <NavLink href="/cronograma" label="Cronograma" />
-          <NavLink href="/cursos" label="Cursos" />
-          <NavLink href="/docentes" label="Docentes" />
-          <NavLink href="/alumnos" label="Alumnos" />
-          <NavLink href="/inscripciones" label="Inscripciones" />
-          <NavLink href="/documentacion" label="Documentación" />
-          <NavLink href="/empresas" label="Empresas" />
-          <NavLink href="/catalogos" label="Catálogos" />
+          {role === "docente" && <NavLink href="/mis-cursos" label="Mis cursos" />}
+          {role !== "docente" && (
+            <>
+              <NavLink href="/cronograma" label="Cronograma" />
+              <NavLink href="/cursos" label="Cursos" />
+              <NavLink href="/docentes" label="Docentes" />
+              <NavLink href="/alumnos" label="Alumnos" />
+              <NavLink href="/inscripciones" label="Inscripciones" />
+              <NavLink href="/documentacion" label="Documentación" />
+              <NavLink href="/empresas" label="Empresas" />
+              <NavLink href="/catalogos" label="Catálogos" />
+            </>
+          )}
           {role === "admin" && (
             <>
               <NavLink href="/usuarios" label="Usuarios" />
