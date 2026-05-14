@@ -9,6 +9,7 @@ import {
   tiposDocIdRouter,
 } from "./routers/catalogs";
 import { coursesRouter } from "./routers/courses";
+import { instancesRouter } from "./routers/instances";
 import { teachersRouter } from "./routers/teachers";
 import { usersRouter } from "./routers/users";
 import { companiesRouter } from "./routers/companies";
@@ -30,6 +31,7 @@ export const appRouter = router({
 
   // Dominio
   courses: coursesRouter,
+  instances: instancesRouter,
   teachers: teachersRouter,
   users: usersRouter,
   companies: companiesRouter,

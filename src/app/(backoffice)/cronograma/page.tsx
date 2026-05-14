@@ -1,8 +1,10 @@
-export default function CronogramaPage() {
-  return (
-    <section>
-      <h1 className="text-2xl font-semibold mb-2">Cronograma</h1>
-      <p className="text-muted-foreground">HU9. Implementado en Sprint 2.</p>
-    </section>
-  );
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { CronogramaView } from "./cronograma-view";
+
+export default async function CronogramaPage() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  if (!["admin", "bedel"].includes(session.user.role)) redirect("/dashboard");
+  return <CronogramaView canRestore={session.user.role === "admin"} />;
 }
