@@ -76,16 +76,17 @@ export function extractPaymentData(text: string): PaymentOcr {
 
   // Número de operación
   let numeroOperacion: string | null = null;
-  const opRe = /(?:n[uú]mero\s+(?:de\s+)?(?:operaci[oó]n|comprobante|transacci[oó]n|referencia)|nro\.?\s*(?:op|comp|trans)|c[oó]digo\s+de\s+operaci[oó]n|id\s+(?:de\s+)?(?:operaci[oó]n|pago))[:\s#]*([A-Z0-9-]{6,40})/i;
+  const opRe = /(?:n[uú]mero\s+(?:de\s+)?(?:operaci[oó]n|comprobante|transacci[oó]n|referencia)|nro\.?\s*(?:op|comp|trans)|c[oó]digo\s+de\s+operaci[oó]n|id\s+(?:de\s+)?(?:operaci[oó]n|pago)|referencia)[:\s#]*([A-Z0-9-]{6,40})/i;
   const op = text.match(opRe);
   if (op) {
     numeroOperacion = op[1]!;
     score += 25;
   } else {
-    // Tomar la cadena alfanumérica más larga ≥10 chars (heurística)
+    // Fallback: cadenas alfanuméricas >=10 chars con >=4 dígitos
     const all = text.match(/\b[A-Z0-9-]{10,40}\b/gi);
-    if (all && all[0]) {
-      numeroOperacion = all[0];
+    const candidate = all?.find((s) => (s.match(/\d/g) ?? []).length >= 4);
+    if (candidate) {
+      numeroOperacion = candidate;
       score += 5;
     }
   }
