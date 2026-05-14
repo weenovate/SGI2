@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, roleProcedure, protectedProcedure } from "../trpc";
+import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
 import { deleteFile } from "@/lib/storage";
 
