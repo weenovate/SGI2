@@ -35,6 +35,8 @@ const t = initTRPC.context<Context>().create({
   },
 });
 
+export const tRPC = t;
+
 export const router = t.router;
 export const middleware = t.middleware;
 export const publicProcedure = t.procedure;
@@ -54,4 +56,15 @@ export function roleProcedure(...roles: Role[]) {
     }
     return next({ ctx });
   });
+}
+
+/**
+ * Helper para procedures de mutación que también escriben auditoría.
+ * Usar como `.mutation(audited(({ ctx, input, log }) => { ... }))`.
+ */
+export function buildAuditCtx(ctx: Context) {
+  return {
+    userId: ctx.session?.user?.id ?? null,
+    ip: ctx.ip,
+  };
 }

@@ -13,6 +13,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:geo": "tsx prisma/seed-geo.ts",
     "test": "vitest",
     "test:e2e": "playwright test"
   },

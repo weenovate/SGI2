@@ -35,6 +35,17 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+async function getSecuritySettings() {
+  const [maxRow, lockRow] = await Promise.all([
+    db.setting.findUnique({ where: { key: "security.maxFailedAttempts" } }),
+    db.setting.findUnique({ where: { key: "security.lockMinutes" } }),
+  ]);
+  return {
+    maxAttempts: typeof maxRow?.value === "number" ? maxRow.value : 5,
+    lockMinutes: typeof lockRow?.value === "number" ? lockRow.value : 15,
+  };
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(db) as Adapter,
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
@@ -53,16 +64,41 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const { username, password } = parsed.data;
 
         const user = await db.user.findFirst({
-          where: {
-            OR: [{ username }, { email: username }],
-            deletedAt: null,
-          },
+          where: { OR: [{ username }, { email: username }], deletedAt: null },
         });
-        if (!user || !user.passwordHash) return null;
-        if (user.status !== "active") return null;
+
+        const fail = async (reason: string) => {
+          await db.loginAttempt.create({
+            data: { username, success: false, reason },
+          });
+          if (user) {
+            const settings = await getSecuritySettings();
+            const failed = user.failedAttempts + 1;
+            const update: { failedAttempts: number; lockedUntil?: Date } = { failedAttempts: failed };
+            if (failed >= settings.maxAttempts) {
+              update.lockedUntil = new Date(Date.now() + settings.lockMinutes * 60_000);
+            }
+            await db.user.update({ where: { id: user.id }, data: update });
+          }
+          return null;
+        };
+
+        if (!user || !user.passwordHash) return fail("user_not_found");
+        if (user.status !== "active") return fail("user_inactive");
+
+        if (user.lockedUntil && user.lockedUntil > new Date()) {
+          await db.loginAttempt.create({ data: { username, success: false, reason: "locked" } });
+          return null;
+        }
 
         const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
+        if (!ok) return fail("bad_password");
+
+        await db.user.update({
+          where: { id: user.id },
+          data: { failedAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+        });
+        await db.loginAttempt.create({ data: { username, success: true } });
 
         const fullName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
         return {

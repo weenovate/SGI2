@@ -1,8 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 
 export default async function BackofficeLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
+  if (!session?.user) {
+    redirect("/login?callbackUrl=/dashboard");
+  }
+  const role = session.user.role;
+  if (!["admin", "bedel", "manager", "docente"].includes(role)) {
+    redirect("/login?error=forbidden");
+  }
 
   return (
     <div className="min-h-dvh flex">
@@ -19,9 +27,14 @@ export default async function BackofficeLayout({ children }: { children: React.R
           <NavLink href="/inscripciones" label="Inscripciones" />
           <NavLink href="/documentacion" label="Documentación" />
           <NavLink href="/empresas" label="Empresas" />
-          <NavLink href="/usuarios" label="Usuarios (Admin)" />
-          <NavLink href="/auditoria" label="Auditoría (Admin)" />
-          <NavLink href="/configuracion" label="Configuración (Admin)" />
+          <NavLink href="/catalogos" label="Catálogos" />
+          {role === "admin" && (
+            <>
+              <NavLink href="/usuarios" label="Usuarios" />
+              <NavLink href="/auditoria" label="Auditoría" />
+              <NavLink href="/configuracion" label="Configuración" />
+            </>
+          )}
         </nav>
       </aside>
       <div className="flex-1 flex flex-col">

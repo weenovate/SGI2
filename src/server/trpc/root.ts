@@ -1,16 +1,41 @@
 import { router, publicProcedure } from "./trpc";
-import { z } from "zod";
+import {
+  titulacionesRouter,
+  sindicatosRouter,
+  categoriasRouter,
+  tiposDocumentacionRouter,
+  estadosDocRouter,
+  motivosRouter,
+  tiposDocIdRouter,
+} from "./routers/catalogs";
+import { coursesRouter } from "./routers/courses";
+import { teachersRouter } from "./routers/teachers";
+import { usersRouter } from "./routers/users";
+import { companiesRouter } from "./routers/companies";
+import { settingsRouter } from "./routers/settings";
+import { auditRouter } from "./routers/audit";
+import { geoRouter } from "./routers/geo";
 
-/**
- * Router raíz. En sprints siguientes se irán anidando los routers de
- * dominio (cursos, docentes, alumnos, inscripciones, etc.).
- */
 export const appRouter = router({
-  health: publicProcedure.query(() => ({
-    ok: true,
-    ts: new Date().toISOString(),
-  })),
-  echo: publicProcedure.input(z.object({ msg: z.string() })).query(({ input }) => input),
+  health: publicProcedure.query(() => ({ ok: true, ts: new Date().toISOString() })),
+
+  // Catálogos
+  titulaciones: titulacionesRouter,
+  sindicatos: sindicatosRouter,
+  categorias: categoriasRouter,
+  tiposDocumentacion: tiposDocumentacionRouter,
+  estadosDocumentacion: estadosDocRouter,
+  motivos: motivosRouter,
+  tiposDocId: tiposDocIdRouter,
+
+  // Dominio
+  courses: coursesRouter,
+  teachers: teachersRouter,
+  users: usersRouter,
+  companies: companiesRouter,
+  settings: settingsRouter,
+  audit: auditRouter,
+  geo: geoRouter,
 });
 
 export type AppRouter = typeof appRouter;
