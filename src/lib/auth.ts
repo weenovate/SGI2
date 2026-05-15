@@ -46,11 +46,60 @@ async function getSecuritySettings() {
   };
 }
 
+// COOKIE_DOMAIN permite que la sesión sea cross-subdomain (ej. ".fuenn.com"
+// para que inscripciones.fuenn.com y sgi.fuenn.com compartan la cookie).
+// En dev con localhost dejarlo vacío.
+const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+const isProd = process.env.NODE_ENV === "production";
+
+// Nombres de cookie sin prefijo __Host- cuando hay domain (los __Host-
+// no admiten Domain attribute). Si no hay domain, usamos los defaults.
+const cookieBase = {
+  options: {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    path: "/",
+    secure: isProd,
+    domain: cookieDomain,
+  },
+};
+
+const cookies = cookieDomain
+  ? {
+      sessionToken: {
+        name: isProd ? "__Secure-authjs.session-token" : "authjs.session-token",
+        options: cookieBase.options,
+      },
+      callbackUrl: {
+        name: isProd ? "__Secure-authjs.callback-url" : "authjs.callback-url",
+        options: { ...cookieBase.options, httpOnly: false },
+      },
+      csrfToken: {
+        // Sin __Host- prefix porque queremos Domain.
+        name: isProd ? "__Secure-authjs.csrf-token" : "authjs.csrf-token",
+        options: cookieBase.options,
+      },
+      pkceCodeVerifier: {
+        name: isProd ? "__Secure-authjs.pkce.code_verifier" : "authjs.pkce.code_verifier",
+        options: { ...cookieBase.options, maxAge: 900 },
+      },
+      state: {
+        name: isProd ? "__Secure-authjs.state" : "authjs.state",
+        options: { ...cookieBase.options, maxAge: 900 },
+      },
+      nonce: {
+        name: isProd ? "__Secure-authjs.nonce" : "authjs.nonce",
+        options: cookieBase.options,
+      },
+    }
+  : undefined;
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(db) as Adapter,
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
   trustHost: true,
   pages: { signIn: "/login" },
+  ...(cookies ? { cookies } : {}),
   providers: [
     Credentials({
       name: "Credenciales",

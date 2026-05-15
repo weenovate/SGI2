@@ -10,6 +10,7 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  COOKIE_DOMAIN: z.string().optional(),
   PUBLIC_HOST: z.string().min(1).default("inscripciones.localhost"),
   BACKOFFICE_HOST: z.string().min(1).default("sgi.localhost"),
   APP_URL: z.string().url().default("http://localhost:3000"),

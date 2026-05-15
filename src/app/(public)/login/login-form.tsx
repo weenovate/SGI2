@@ -1,13 +1,12 @@
 "use client";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
-  const router = useRouter();
   const search = useSearchParams();
   const callback = search.get("callbackUrl") ?? "/after-login";
   const [username, setUsername] = useState("");
@@ -28,11 +27,14 @@ export function LoginForm() {
       });
       if (!res || res.error) {
         setError("Usuario o contraseña inválidos");
-      } else {
-        router.push(res.url ?? callback);
-        router.refresh();
+        setLoading(false);
+        return;
       }
-    } finally {
+      // Full-page navigation: garantiza que el server-side render del
+      // destino vea la cookie nueva (evita la trabe al cambiar de usuario).
+      window.location.href = res.url ?? callback;
+    } catch {
+      setError("Error de red. Intentá de nuevo.");
       setLoading(false);
     }
   }

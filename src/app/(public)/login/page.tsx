@@ -1,9 +1,12 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
+import { LoggedInSwitcher } from "./logged-in-switcher";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BrandLogo } from "@/components/brand-logo";
 import { auth } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,
@@ -28,9 +31,17 @@ export default async function LoginPage({
           <CardDescription>Usá tu DNI/CUIT/usuario y tu contraseña.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando…</div>}>
-            <LoginForm />
-          </Suspense>
+          {session?.user ? (
+            <LoggedInSwitcher
+              name={session.user.name ?? session.user.email ?? "Usuario"}
+              email={session.user.email ?? ""}
+              callbackUrl={params.callbackUrl ?? "/after-login"}
+            />
+          ) : (
+            <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando…</div>}>
+              <LoginForm />
+            </Suspense>
+          )}
         </CardContent>
       </Card>
     </section>
