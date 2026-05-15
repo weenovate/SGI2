@@ -10,6 +10,10 @@ export default async function BackofficeLayout({ children }: { children: React.R
     redirect("/login?callbackUrl=/dashboard");
   }
   const role = session.user.role;
+  if (role === "alumno") {
+    // Un alumno logueado que intenta entrar al backoffice → su área.
+    redirect("/mi-dashboard");
+  }
   if (!["admin", "bedel", "manager", "docente"].includes(role)) {
     redirect("/login?error=forbidden");
   }
