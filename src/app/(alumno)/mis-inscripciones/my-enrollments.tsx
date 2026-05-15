@@ -53,7 +53,7 @@ export function MyEnrollments() {
       <Card>
         <CardHeader>
           <CardTitle>Mis inscripciones</CardTitle>
-          <CardDescription>HU3. Podés cancelar las que aún no estén cerradas.</CardDescription>
+          <CardDescription>Podés cancelar las que aún no estén cerradas.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -1,29 +1,33 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand-logo";
-import { auth, signOut } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { UserMenu } from "@/components/user-menu";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const user = session?.user ?? null;
   const role = user?.role ?? null;
 
-  // Cuando el usuario ya está logueado, "home" personal según rol
   const homeHref =
     role === "alumno"
       ? "/mi-dashboard"
       : role && ["admin", "bedel", "manager", "docente"].includes(role)
         ? "/dashboard"
         : null;
+  const profileHref = role === "alumno" ? "/mis-datos" : null;
 
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="border-b bg-white">
         <div className="container mx-auto h-16 flex items-center justify-between gap-4">
-          <Link href="/calendario" className="flex items-center" aria-label="FuENN — inicio">
+          <Link href={homeHref ?? "/calendario"} className="flex items-center" aria-label="FuENN — inicio">
             <BrandLogo height={36} />
           </Link>
           <nav className="text-sm flex items-center gap-3 sm:gap-4">
+            {user && homeHref && (
+              <Link href={homeHref} className="hover:underline">Inicio</Link>
+            )}
             <Link href="/calendario" className="hover:underline">Calendario</Link>
             {user ? (
               <>
@@ -33,18 +37,12 @@ export default async function PublicLayout({ children }: { children: React.React
                     <Link href="/mi-documentacion" className="hover:underline hidden sm:inline">Mi documentación</Link>
                   </>
                 )}
-                {homeHref && (
-                  <Link href={homeHref} className="hover:underline hidden sm:inline">
-                    {role === "alumno" ? "Mi panel" : "Backoffice"}
-                  </Link>
-                )}
                 <NotificationsBell />
-                <span className="text-muted-foreground truncate max-w-[12rem]" title={user.email ?? ""}>
-                  {user.name ?? user.email}
-                </span>
-                <form action={async () => { "use server"; await signOut({ redirectTo: "/calendario" }); }}>
-                  <button type="submit" className="text-muted-foreground hover:text-foreground">Salir</button>
-                </form>
+                <UserMenu
+                  name={user.name ?? user.email ?? "Usuario"}
+                  email={user.email ?? undefined}
+                  profileHref={profileHref ?? "/"}
+                />
               </>
             ) : (
               <>

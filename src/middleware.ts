@@ -37,11 +37,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isPublic && pathname === "/") {
-    url.pathname = "/calendario";
-    return NextResponse.redirect(url);
-  }
-
+  // En public, dejamos que la page raíz decida (puede leer sesión).
   return NextResponse.next({ request: { headers } });
 }
 

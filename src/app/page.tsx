@@ -1,35 +1,21 @@
-import Link from "next/link";
-import { BrandLogo } from "@/components/brand-logo";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 /**
- * Home raíz. En la práctica el middleware redirige según subdominio:
- *   inscripciones.* -> /calendario
- *   sgi.*           -> /dashboard
- *
- * Este fallback solo se ve si se entra por un host no clasificado.
+ * Home raíz. En public host, el middleware delega acá la decisión para
+ * poder leer la sesión:
+ *   - alumno logueado → /mi-dashboard
+ *   - backoffice logueado → /dashboard (en su host)
+ *   - anónimo → /calendario
  */
-export default function Home() {
-  return (
-    <main className="container mx-auto py-16 max-w-2xl">
-      <BrandLogo height={56} className="mb-6" />
-      <h1 className="text-3xl font-bold mb-6">Sistema de Gestión de Inscripciones</h1>
-      <p className="text-muted-foreground mb-8">
-        Acceso según subdominio:
-      </p>
-      <ul className="space-y-3">
-        <li>
-          <strong>inscripciones.fuenn.com</strong>:{" "}
-          <Link className="text-primary underline" href="/calendario">
-            calendario público de cursos
-          </Link>
-        </li>
-        <li>
-          <strong>sgi.fuenn.com</strong>:{" "}
-          <Link className="text-primary underline" href="/dashboard">
-            backoffice operativo
-          </Link>
-        </li>
-      </ul>
-    </main>
-  );
+export default async function Home() {
+  const session = await auth();
+  const role = session?.user?.role;
+  if (role === "alumno") redirect("/mi-dashboard");
+  if (role && ["admin", "bedel", "manager", "docente"].includes(role)) {
+    redirect("/dashboard");
+  }
+  redirect("/calendario");
 }
