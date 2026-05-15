@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { CountPill } from "@/components/count-pill";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -38,6 +39,7 @@ export function CoursesView({ canRestore }: { canRestore: boolean }) {
 
   const utils = api.useUtils();
   const list = api.courses.list.useQuery({ q: q || undefined, includeDeleted: true });
+  const totalAll = api.courses.list.useQuery({ includeDeleted: true });
   const cats = api.categorias.list.useQuery();
   const tipos = api.tiposDocumentacion.list.useQuery();
   const create = api.courses.create.useMutation({ onSuccess: () => { utils.courses.list.invalidate(); setOpen(false); } });
@@ -102,7 +104,10 @@ export function CoursesView({ canRestore }: { canRestore: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Cursos</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Cursos
+            <CountPill total={totalAll.data?.total} filtered={q ? list.data?.total : undefined} loading={list.isLoading || totalAll.isLoading} />
+          </h1>
           <p className="text-sm text-muted-foreground">CRUD de cursos maestros (HU7).</p>
         </div>
         <div className="flex gap-2">

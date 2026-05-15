@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CountPill } from "@/components/count-pill";
 
 type Form = {
   cuit: string;
@@ -33,6 +34,7 @@ export function TeachersView() {
 
   const utils = api.useUtils();
   const list = api.teachers.list.useQuery({ q: q || undefined, includeDeleted: true });
+  const totalAll = api.teachers.list.useQuery({ includeDeleted: true });
   const titulaciones = api.titulaciones.list.useQuery();
   const byId = api.teachers.byId.useQuery({ id: editingId ?? "" }, { enabled: !!editingId });
   const create = api.teachers.create.useMutation({ onSuccess: () => { utils.teachers.list.invalidate(); setOpen(false); setForm(empty); } });
@@ -82,7 +84,10 @@ export function TeachersView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Docentes</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Docentes
+            <CountPill total={totalAll.data?.length} filtered={q ? list.data?.length : undefined} loading={list.isLoading || totalAll.isLoading} />
+          </h1>
           <p className="text-sm text-muted-foreground">CRUD de docentes con envío automático de credenciales (HU8).</p>
         </div>
         <div className="flex gap-2">

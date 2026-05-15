@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CountPill } from "@/components/count-pill";
 
 const statusLabel: Record<string, string> = {
   preinscripto: "Preinscripto",
@@ -23,12 +24,17 @@ export function EnrollmentsView() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("");
   const list = api.enrollments.list.useQuery({ q: q || undefined, status: (status || undefined) as never });
+  const totalAll = api.enrollments.list.useQuery({});
+  const hasFilter = !!(q || status);
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Inscripciones</h1>
-        <p className="text-sm text-muted-foreground">HU12. Aprobá / rechazá / pasá a &ldquo;Validar pago&rdquo;.</p>
+        <h1 className="text-2xl font-semibold flex items-center gap-2">
+          Inscripciones
+          <CountPill total={totalAll.data?.total} filtered={hasFilter ? list.data?.total : undefined} loading={list.isLoading || totalAll.isLoading} />
+        </h1>
+        <p className="text-sm text-muted-foreground">Aprobá / rechazá / pasá a &ldquo;Validar pago&rdquo;.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

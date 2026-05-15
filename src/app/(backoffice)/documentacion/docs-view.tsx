@@ -10,15 +10,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CountPill } from "@/components/count-pill";
 
 export function DocsBackoffice() {
   const [tab, setTab] = useState<"pendiente" | "aprobada" | "rechazada" | "vencida">("pendiente");
   const [q, setQ] = useState("");
+  const totalAll = api.documents.list.useQuery({});
+  const totalTab = api.documents.list.useQuery({ status: tab });
+  const totalFiltered = api.documents.list.useQuery({ status: tab, q: q || undefined });
+  const hasFilter = !!q;
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Documentación</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Documentación
+            <CountPill
+              total={totalAll.data?.total}
+              filtered={hasFilter ? totalFiltered.data?.total : totalTab.data?.total}
+              loading={totalAll.isLoading}
+            />
+          </h1>
           <p className="text-sm text-muted-foreground">Cola de aprobación / rechazo (HU11).</p>
         </div>
         <div className="relative">

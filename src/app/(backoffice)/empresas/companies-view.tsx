@@ -9,15 +9,26 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CountPill } from "@/components/count-pill";
 
 export function CompaniesView() {
-  const [tab, setTab] = useState("approved");
+  const [tab, setTab] = useState<"approved" | "pending_approval" | "rejected">("approved");
   const [q, setQ] = useState("");
+  const totalAll = api.companies.list.useQuery({});
+  const totalTab = api.companies.list.useQuery({ status: tab });
+  const totalFiltered = api.companies.list.useQuery({ status: tab, q: q || undefined });
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Empresas</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Empresas
+            <CountPill
+              total={totalAll.data?.length}
+              filtered={q ? totalFiltered.data?.length : totalTab.data?.length}
+              loading={totalAll.isLoading}
+            />
+          </h1>
           <p className="text-sm text-muted-foreground">CRUD + cola de aprobación de empresas sugeridas por alumnos.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -28,7 +39,7 @@ export function CompaniesView() {
           <NewCompanyButton />
         </div>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
           <TabsTrigger value="approved">Aprobadas</TabsTrigger>
           <TabsTrigger value="pending_approval">Pendientes</TabsTrigger>

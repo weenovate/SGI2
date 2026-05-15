@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { CountPill } from "@/components/count-pill";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
   const teachers = api.teachers.list.useQuery();
   const settings = api.settings.list.useQuery({ category: "instancia" });
   const list = api.instances.list.useQuery({ q: q || undefined, includeDeleted: true });
+  const totalAll = api.instances.list.useQuery({ includeDeleted: true });
   const byId = api.instances.byId.useQuery({ id: editingId ?? "" }, { enabled: !!editingId });
   const create = api.instances.create.useMutation({ onSuccess: () => { utils.instances.list.invalidate(); setOpen(false); setForm(empty); } });
   const update = api.instances.update.useMutation({ onSuccess: () => { utils.instances.list.invalidate(); setOpen(false); setForm(empty); } });
@@ -122,8 +124,11 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Cronograma</h1>
-          <p className="text-sm text-muted-foreground">Instancias de cursos publicadas (HU9).</p>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Cronograma
+            <CountPill total={totalAll.data?.total} filtered={q ? list.data?.total : undefined} loading={list.isLoading || totalAll.isLoading} />
+          </h1>
+          <p className="text-sm text-muted-foreground">Instancias de cursos publicadas.</p>
         </div>
         <div className="flex gap-2">
           <div className="relative">

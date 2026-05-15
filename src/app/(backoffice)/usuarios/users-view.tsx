@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CountPill } from "@/components/count-pill";
 
 type Form = { docTypeId: string; docNumber: string; firstName: string; lastName: string; role: "admin" | "bedel" | "manager"; email: string; password: string };
 const empty: Form = { docTypeId: "", docNumber: "", firstName: "", lastName: "", role: "bedel", email: "", password: "" };
@@ -30,6 +31,10 @@ export function UsersView() {
     role: roleFilter || undefined,
     includeDeleted: true,
   });
+  const totalAll = api.users.list.useQuery({ includeDeleted: true });
+  const backofficeFiltered = (list.data ?? []).filter((u) => ["admin", "bedel", "manager"].includes(u.role));
+  const backofficeAll = (totalAll.data ?? []).filter((u) => ["admin", "bedel", "manager"].includes(u.role));
+  const hasFilter = !!(q || roleFilter);
   const create = api.users.create.useMutation({ onSuccess: () => { utils.users.list.invalidate(); setOpen(false); setForm(empty); } });
   const update = api.users.update.useMutation({ onSuccess: () => { utils.users.list.invalidate(); setOpen(false); setForm(empty); } });
   const reset = api.users.resetPassword.useMutation({ onSuccess: () => { setResetFor(null); setResetPwd(""); } });
@@ -57,8 +62,11 @@ export function UsersView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Usuarios del backoffice</h1>
-          <p className="text-sm text-muted-foreground">Admin / Bedel / Manager (HU14). Para Docentes y Alumnos hay vistas dedicadas.</p>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Usuarios del backoffice
+            <CountPill total={backofficeAll.length} filtered={hasFilter ? backofficeFiltered.length : undefined} loading={list.isLoading || totalAll.isLoading} />
+          </h1>
+          <p className="text-sm text-muted-foreground">Admin / Bedel / Manager. Para Docentes y Alumnos hay vistas dedicadas.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

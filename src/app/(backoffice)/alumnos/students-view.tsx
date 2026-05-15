@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CountPill } from "@/components/count-pill";
 
 export function StudentsBackoffice({ canRestore }: { canRestore: boolean }) {
   const [q, setQ] = useState("");
@@ -19,6 +20,7 @@ export function StudentsBackoffice({ canRestore }: { canRestore: boolean }) {
   const utils = api.useUtils();
   const tipos = api.tiposDocId.list.useQuery();
   const list = api.students.list.useQuery({ q: q || undefined, includeDeleted: true });
+  const totalAll = api.students.list.useQuery({ includeDeleted: true });
   const create = api.students.create.useMutation({ onSuccess: () => { utils.students.list.invalidate(); setOpen(false); setForm({ docTypeId: "", docNumber: "", firstName: "", lastName: "", email: "" }); } });
   const reset = api.students.resetPassword.useMutation();
   const del = api.students.softDelete.useMutation({ onSuccess: () => utils.students.list.invalidate() });
@@ -28,7 +30,10 @@ export function StudentsBackoffice({ canRestore }: { canRestore: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Alumnos</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            Alumnos
+            <CountPill total={totalAll.data?.length} filtered={q ? list.data?.length : undefined} loading={list.isLoading || totalAll.isLoading} />
+          </h1>
           <p className="text-sm text-muted-foreground">CRUD de alumnos (HU10). El alta envía credenciales por email.</p>
         </div>
         <div className="flex items-center gap-2">
