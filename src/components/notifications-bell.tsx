@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Bell } from "lucide-react";
 import { api } from "@/lib/trpc/react";
@@ -13,9 +15,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function NotificationsBell() {
+  const router = useRouter();
   const utils = api.useUtils();
   const unread = api.notifications.myUnreadCount.useQuery(undefined, { refetchInterval: 60_000 });
-  const list = api.notifications.myList.useQuery({ limit: 20 });
+  const list = api.notifications.myList.useQuery({ limit: 8 });
   const markRead = api.notifications.markRead.useMutation({
     onSuccess: () => { utils.notifications.myUnreadCount.invalidate(); utils.notifications.myList.invalidate(); },
   });
@@ -23,6 +26,12 @@ export function NotificationsBell() {
     onSuccess: () => { utils.notifications.myUnreadCount.invalidate(); utils.notifications.myList.invalidate(); },
   });
   const [open, setOpen] = useState(false);
+
+  function onItemClick(id: string, read: boolean | Date | string | null) {
+    if (!read) markRead.mutate({ id });
+    setOpen(false);
+    router.push("/notificaciones");
+  }
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -41,7 +50,7 @@ export function NotificationsBell() {
           <span className="text-sm font-medium">Notificaciones</span>
           {(unread.data ?? 0) > 0 && (
             <Button variant="ghost" size="sm" onClick={() => markAll.mutate()} disabled={markAll.isPending}>
-              Marcar todas como leídas
+              Marcar todas
             </Button>
           )}
         </div>
@@ -52,18 +61,27 @@ export function NotificationsBell() {
         {list.data?.map((n) => (
           <DropdownMenuItem
             key={n.id}
-            onClick={(e) => { e.preventDefault(); if (!n.read) markRead.mutate({ id: n.id }); }}
+            onClick={(e) => { e.preventDefault(); onItemClick(n.id, n.read); }}
             className={"flex-col items-start gap-1 cursor-pointer " + (n.read ? "opacity-70" : "")}
           >
             <div className="flex items-center justify-between w-full">
-              <span className="font-medium text-sm">{n.title}</span>
+              <span className={"text-sm " + (n.read ? "" : "font-semibold")}>{n.title}</span>
               {n.level === "critical" && <Badge variant="destructive">crítica</Badge>}
               {n.level === "important" && <Badge variant="warning">importante</Badge>}
             </div>
-            <span className="text-xs text-muted-foreground">{n.body}</span>
-            <span className="text-[10px] text-muted-foreground">{new Date(n.createdAt).toLocaleString("es-AR")}{n.read ? ` · leída` : ""}</span>
+            <span className="text-xs text-muted-foreground line-clamp-2">{n.body}</span>
+            <span className="text-[10px] text-muted-foreground">
+              {new Date(n.createdAt).toLocaleString("es-AR")}
+              {n.read ? " · leída" : " · no leída"}
+            </span>
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/notificaciones" className="justify-center text-sm font-medium text-primary">
+            Ver todas
+          </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
