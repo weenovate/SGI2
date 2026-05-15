@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Save } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,7 +67,7 @@ export function ConfigPanel() {
   async function saveCategory(cat: string) {
     const items = (grouped.get(cat) ?? []).map((s) => ({ key: s.key, value: draft[s.key] }));
     await upsertMany.mutateAsync(items);
-    alert("Cambios guardados.");
+    toast.success("Cambios guardados");
   }
 
   const cats = Array.from(grouped.keys()).sort((a, b) => (categoryLabels[a] ?? a).localeCompare(categoryLabels[b] ?? b));

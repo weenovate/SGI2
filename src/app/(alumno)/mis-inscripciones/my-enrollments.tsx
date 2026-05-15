@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Search, Upload, X } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,8 +109,8 @@ export function MyEnrollments() {
                     {(e.status === "preinscripto" || e.status === "validar_pago") && (
                       <Button size="sm" variant="ghost" onClick={async () => {
                         if (!confirm("¿Cancelar inscripción?")) return;
-                        try { await cancel.mutateAsync({ id: e.id }); }
-                        catch (err) { alert(err instanceof Error ? err.message : "Error"); }
+                        try { await cancel.mutateAsync({ id: e.id }); toast.success("Inscripción cancelada"); }
+                        catch (err) { toast.error("No se pudo cancelar", err instanceof Error ? err.message : undefined); }
                       }}>
                         <X className="h-4 w-4" /> Cancelar
                       </Button>

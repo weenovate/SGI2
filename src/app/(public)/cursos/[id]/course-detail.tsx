@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,8 +103,8 @@ export function CourseDetail({ id }: { id: string }) {
           <Button
             variant="outline"
             onClick={async () => {
-              try { await enterWaitlist.mutateAsync({ instanceId: it.id }); alert("Te anotamos en la lista de espera."); }
-              catch (e) { alert(e instanceof Error ? e.message : "Error"); }
+              try { await enterWaitlist.mutateAsync({ instanceId: it.id }); toast.success("Te anotamos en la lista de espera"); }
+              catch (e) { toast.error("No se pudo anotar en la lista", e instanceof Error ? e.message : undefined); }
             }}
             disabled={enterWaitlist.isPending}
           >

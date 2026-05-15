@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { KeyRound, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -187,7 +188,7 @@ export function TeachersView() {
             <Button variant="destructive" onClick={async () => {
               if (!transferOpen) return;
               try { await del.mutateAsync({ id: transferOpen, transferToTeacherId: transferTo || undefined }); }
-              catch (e) { alert(e instanceof Error ? e.message : "Error"); }
+              catch (e) { toast.error("Error", e instanceof Error ? e.message : undefined); }
             }}>Eliminar</Button>
           </DialogFooter>
         </DialogContent>

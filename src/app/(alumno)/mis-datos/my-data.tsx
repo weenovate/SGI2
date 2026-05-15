@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ function PerfilTab() {
   const sindicatos = api.sindicatos.list.useQuery();
   const empresas = api.companies.listForStudents.useQuery();
   const provincias = api.geo.provincias.useQuery({ paisId: "ARG" });
-  const update = api.students.updateProfile.useMutation({ onSuccess: () => alert("Datos guardados.") });
+  const update = api.students.updateProfile.useMutation({ onSuccess: () => toast.success("Datos guardados") });
   const [form, setForm] = useState({
     firstName: "", lastName: "", birthDate: "", nationality: "",
     titulacionId: "", empresaId: "", sindicatoId: "", phone: "",
