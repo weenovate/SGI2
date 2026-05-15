@@ -1,7 +1,8 @@
 "use client";
-import { useRef, useState } from "react";
-import { FileText, Plus, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Image as ImageIcon, Plus, Trash2, Upload, UploadCloud, X } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,28 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-type UploadResult = { id: string; relPath: string; mime: string; originalName: string; size: number; warning?: string; quality?: { score: number } };
+type UploadResult = {
+  id: string;
+  relPath: string;
+  mime: string;
+  originalName: string;
+  size: number;
+  warning?: string;
+  quality?: { score: number } | null;
+  documentOcr?: {
+    expiresAt: string | null;
+    typeMatched: boolean;
+    score: number;
+  } | null;
+  // Preview local (objectURL) generado en el cliente al cargar el archivo.
+  previewUrl?: string;
+};
+
+const ALLOWED_MIMES = "application/pdf,image/jpeg,image/png,image/webp";
+const ALLOWED_LABEL = "PDF, JPG, PNG o WEBP";
+const MAX_MB = 15;
 
 export function MyDocs() {
   const utils = api.useUtils();
@@ -19,20 +40,21 @@ export function MyDocs() {
   const create = api.documents.myCreate.useMutation({ onSuccess: () => utils.documents.myList.invalidate() });
   const replace = api.documents.myReplaceFiles.useMutation({ onSuccess: () => utils.documents.myList.invalidate() });
   const del = api.documents.myDelete.useMutation({ onSuccess: () => utils.documents.myList.invalidate() });
-  const [open, setOpen] = useState<{ replaceId?: string } | null>(null);
+  const [open, setOpen] = useState<{ replaceId?: string; replaceTipoId?: string } | null>(null);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Mi documentación</h1>
-          <p className="text-sm text-muted-foreground">Subí PDF/JPG/PNG (hasta 15 MB).</p>
+          <p className="text-sm text-muted-foreground">{ALLOWED_LABEL}, hasta {MAX_MB} MB por archivo.</p>
         </div>
         <Button onClick={() => setOpen({})}><Plus className="h-4 w-4" /> Subir nuevo documento</Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {list.data?.length === 0 && <p className="col-span-3 text-muted-foreground">Aún no subiste documentación.</p>}
+        {list.isLoading && <p className="col-span-3 text-muted-foreground">Cargando…</p>}
+        {!list.isLoading && list.data?.length === 0 && <p className="col-span-3 text-muted-foreground">Aún no subiste documentación.</p>}
         {list.data?.map((d) => (
           <Card key={d.id}>
             <CardHeader>
@@ -43,7 +65,7 @@ export function MyDocs() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {d.status === "aprobada" && <Badge variant="success">Aprobada</Badge>}
                 {d.status === "pendiente" && <Badge variant="warning">Pendiente</Badge>}
                 {d.status === "rechazada" && <Badge variant="destructive">Rechazada</Badge>}
@@ -59,10 +81,14 @@ export function MyDocs() {
                 ))}
               </div>
               <div className="flex gap-2 pt-2">
-                <Button size="sm" variant="outline" onClick={() => setOpen({ replaceId: d.id })}>
+                <Button size="sm" variant="outline" onClick={() => setOpen({ replaceId: d.id, replaceTipoId: d.tipoId })}>
                   <Upload className="h-4 w-4" /> Reemplazar
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => { if (confirm("¿Eliminar?")) del.mutate({ id: d.id }); }}>
+                <Button size="sm" variant="ghost" onClick={async () => {
+                  if (!confirm("¿Eliminar este documento?")) return;
+                  try { await del.mutateAsync({ id: d.id }); toast.success("Documento eliminado"); }
+                  catch (e) { toast.error("No se pudo eliminar", e instanceof Error ? e.message : undefined); }
+                }}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -75,9 +101,16 @@ export function MyDocs() {
         open={!!open}
         onClose={() => setOpen(null)}
         replaceId={open?.replaceId}
+        replaceTipoId={open?.replaceTipoId}
         tipos={tipos.data ?? []}
-        onCreate={async (tipoId, files, expiresAt) => { await create.mutateAsync({ tipoId, fileObjectIds: files, expiresAt }); }}
-        onReplace={async (id, files, expiresAt) => { await replace.mutateAsync({ documentId: id, fileObjectIds: files, expiresAt }); }}
+        onCreate={async (tipoId, files, expiresAt) => {
+          await create.mutateAsync({ tipoId, fileObjectIds: files, expiresAt });
+          toast.success("Documento enviado", "Lo vamos a revisar a la brevedad.");
+        }}
+        onReplace={async (id, files, expiresAt) => {
+          await replace.mutateAsync({ documentId: id, fileObjectIds: files, expiresAt });
+          toast.success("Archivos reemplazados");
+        }}
       />
     </div>
   );
@@ -87,42 +120,118 @@ function UploadDialog(props: {
   open: boolean;
   onClose: () => void;
   replaceId?: string;
-  tipos: Array<{ id: string; label: string; hasExpiry: boolean }>;
+  replaceTipoId?: string;
+  tipos: Array<{ id: string; code: string; label: string; hasExpiry: boolean }>;
   onCreate: (tipoId: string, files: string[], expiresAt: Date | null) => Promise<void>;
   onReplace: (id: string, files: string[], expiresAt: Date | null) => Promise<void>;
 }) {
-  const [tipoId, setTipoId] = useState("");
+  const [tipoId, setTipoId] = useState(props.replaceTipoId ?? "");
   const [expiresAt, setExpiresAt] = useState("");
   const [uploaded, setUploaded] = useState<UploadResult[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const tipoSelected = props.tipos.find((t) => t.id === tipoId);
+  const tipoSelected = useMemo(
+    () => props.tipos.find((t) => t.id === tipoId),
+    [props.tipos, tipoId],
+  );
+  const hasExpiry = !!tipoSelected?.hasExpiry || !!props.replaceId;
 
-  async function handleUpload(files: FileList) {
+  // Reset al cerrar
+  useEffect(() => {
+    if (!props.open) {
+      uploaded.forEach((u) => u.previewUrl && URL.revokeObjectURL(u.previewUrl));
+      setUploaded([]);
+      setTipoId(props.replaceTipoId ?? "");
+      setExpiresAt("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open]);
+
+  // Pre-fill de Vencimiento desde OCR del primer archivo (si vino dato y el
+  // usuario aún no lo escribió manualmente).
+  useEffect(() => {
+    if (!hasExpiry) return;
+    if (expiresAt) return;
+    const first = uploaded.find((u) => u.documentOcr?.expiresAt);
+    if (first?.documentOcr?.expiresAt) {
+      const iso = new Date(first.documentOcr.expiresAt).toISOString().slice(0, 10);
+      setExpiresAt(iso);
+      toast.info("Vencimiento detectado por OCR", "Revisalo antes de guardar.");
+    }
+  }, [uploaded, hasExpiry, expiresAt]);
+
+  async function handleFiles(files: FileList | File[]) {
+    const arr = Array.from(files);
+    if (arr.length === 0) return;
+    // Validar tamaño/tipo en cliente (defensa adicional al server)
+    for (const f of arr) {
+      if (f.size > MAX_MB * 1024 * 1024) {
+        toast.warning("Archivo demasiado grande", `${f.name} supera ${MAX_MB} MB`);
+        return;
+      }
+    }
+
     setBusy(true);
-    setError(null);
     try {
       const fd = new FormData();
-      Array.from(files).forEach((f) => fd.append("files", f));
-      const res = await fetch("/api/upload?bucket=documents", { method: "POST", body: fd });
+      arr.forEach((f) => fd.append("files", f));
+      const tipoCode = tipoSelected?.code ?? props.tipos.find((t) => t.id === props.replaceTipoId)?.code;
+      const url = `/api/upload?bucket=documents${tipoCode ? `&tipoCode=${encodeURIComponent(tipoCode)}` : ""}`;
+      const res = await fetch(url, { method: "POST", body: fd });
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || `HTTP ${res.status}`);
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
       }
       const j = (await res.json()) as { files: UploadResult[] };
-      setUploaded((s) => [...s, ...j.files]);
+      const enriched = j.files.map((f, i) => {
+        const local = arr[i];
+        const previewUrl = local && local.type.startsWith("image/") ? URL.createObjectURL(local) : undefined;
+        return { ...f, previewUrl };
+      });
+      setUploaded((s) => [...s, ...enriched]);
+      const warned = enriched.find((e) => e.warning);
+      if (warned) toast.warning("Calidad baja", warned.warning);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      toast.error("No se pudo subir el archivo", e instanceof Error ? e.message : undefined);
     } finally {
       setBusy(false);
     }
   }
 
+  function removeUploaded(id: string) {
+    setUploaded((s) => {
+      const target = s.find((u) => u.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return s.filter((u) => u.id !== id);
+    });
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
+  }
+
+  async function submit() {
+    try {
+      const exp = expiresAt ? new Date(expiresAt) : null;
+      const fileIds = uploaded.map((u) => u.id);
+      if (props.replaceId) {
+        await props.onReplace(props.replaceId, fileIds, exp);
+      } else {
+        await props.onCreate(tipoId, fileIds, exp);
+      }
+      props.onClose();
+    } catch (e) {
+      toast.error("No se pudo guardar", e instanceof Error ? e.message : undefined);
+    }
+  }
+
   return (
     <Dialog open={props.open} onOpenChange={(v) => { if (!v) props.onClose(); }}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{props.replaceId ? "Reemplazar archivos" : "Subir nuevo documento"}</DialogTitle>
         </DialogHeader>
@@ -133,57 +242,94 @@ function UploadDialog(props: {
               <Select value={tipoId || "_"} onValueChange={(v) => setTipoId(v === "_" ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder="Elegir…" /></SelectTrigger>
                 <SelectContent>
+                  {props.tipos.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Sin tipos cargados.</div>}
                   {props.tipos.map((t) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           )}
-          {(tipoSelected?.hasExpiry || props.replaceId) && (
+
+          {hasExpiry && (
             <div>
-              <Label>Fecha de vencimiento (opcional)</Label>
+              <Label>Vencimiento</Label>
               <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">Si tu documento tiene fecha de vencimiento visible, vamos a intentar autocompletarla con OCR. Verificá el dato antes de guardar.</p>
             </div>
           )}
+
           <div>
             <Label>Archivos</Label>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept="application/pdf,image/jpeg,image/png,image/webp"
-              onChange={(e) => e.target.files && handleUpload(e.target.files)}
-            />
-            <p className="text-xs text-muted-foreground mt-1">PDF/JPG/PNG hasta 15 MB. Para documentos con anverso y reverso, subí ambas imágenes.</p>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => inputRef.current?.click()}
+              className={cn(
+                "mt-1 cursor-pointer rounded-md border-2 border-dashed p-6 text-center transition-colors",
+                dragOver ? "border-primary bg-primary/5" : "border-input hover:border-primary/50 hover:bg-accent/30",
+              )}
+              role="button"
+              aria-label="Arrastrá archivos o hacé click para elegirlos"
+            >
+              <UploadCloud className="mx-auto h-8 w-8 text-muted-foreground" />
+              <p className="mt-2 text-sm">
+                <strong>Arrastrá los archivos</strong> o <span className="text-primary underline">hacé click para elegirlos</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{ALLOWED_LABEL}, hasta {MAX_MB} MB cada uno.</p>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                accept={ALLOWED_MIMES}
+                className="hidden"
+                onChange={(e) => e.target.files && handleFiles(e.target.files)}
+              />
+            </div>
+            {busy && <p className="text-xs text-muted-foreground mt-2">Subiendo…</p>}
           </div>
+
           {uploaded.length > 0 && (
-            <div className="border rounded-md p-2 space-y-1">
-              {uploaded.map((u) => (
-                <div key={u.id} className="text-xs flex items-center justify-between">
-                  <span>{u.originalName} ({Math.round(u.size / 1024)} KB){u.quality && ` — score ${u.quality.score}`}</span>
-                  {u.warning && <Badge variant="warning">{u.warning}</Badge>}
-                </div>
-              ))}
+            <div>
+              <Label>Archivos cargados ({uploaded.length})</Label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2">
+                {uploaded.map((u) => (
+                  <div key={u.id} className="relative group border rounded-md overflow-hidden bg-slate-50">
+                    <div className="aspect-square flex items-center justify-center">
+                      {u.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={u.previewUrl} alt={u.originalName} className="object-cover w-full h-full" />
+                      ) : u.mime === "application/pdf" ? (
+                        <FileText className="h-10 w-10 text-red-500" />
+                      ) : (
+                        <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => { e.stopPropagation(); removeUploaded(u.id); }}
+                      aria-label="Quitar"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="px-1 py-1 text-[10px] leading-tight truncate" title={u.originalName}>
+                      {u.originalName}
+                    </div>
+                    <div className="px-1 pb-1 text-[10px] text-muted-foreground">
+                      {Math.round(u.size / 1024)} KB
+                      {u.quality && ` · score ${u.quality.score}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={props.onClose}>Cancelar</Button>
           <Button
             disabled={busy || uploaded.length === 0 || (!props.replaceId && !tipoId)}
-            onClick={async () => {
-              try {
-                const exp = expiresAt ? new Date(expiresAt) : null;
-                if (props.replaceId) {
-                  await props.onReplace(props.replaceId, uploaded.map((u) => u.id), exp);
-                } else {
-                  await props.onCreate(tipoId, uploaded.map((u) => u.id), exp);
-                }
-                setUploaded([]); setTipoId(""); setExpiresAt(""); props.onClose();
-              } catch (e) {
-                setError(e instanceof Error ? e.message : "Error");
-              }
-            }}
+            onClick={submit}
           >
             Guardar
           </Button>
