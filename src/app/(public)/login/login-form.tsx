@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 export function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const callback = search.get("callbackUrl") ?? "/dashboard";
+  const callback = search.get("callbackUrl") ?? "/after-login";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
