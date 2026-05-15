@@ -5,6 +5,11 @@ capacitación marítima. Provee un calendario público de cursos
 (`inscripciones.fuenn.com`) y un backoffice operativo
 (`sgi.fuenn.com`) bajo un único proyecto Next.js.
 
+> **👋 Si estás retomando el proyecto en otra sesión, leé primero
+> [`docs/HANDOFF.md`](docs/HANDOFF.md).** Tiene reglas operativas,
+> estado completo, decisiones técnicas, mapas Sprint → commit y
+> "cómo retomar" paso a paso.
+
 > **Spec original**: `Especificaciones_SGI_Mayo2026.docx`
 > **Plan / sprints**: ver el plan aprobado del proyecto.
 
@@ -86,7 +91,10 @@ src/
 ├── components/         # UI shadcn + compartidos
 └── middleware.ts       # ruteo por host
 docs/
-└── deploy-cpanel.md    # runbook de deploy en VPS + cPanel
+├── HANDOFF.md          # contexto completo para retomar en otra sesión
+├── deploy-cpanel.md    # cómo deployar desde cero en cPanel
+├── runbook.md          # operación: crons, backups, errores, checklist
+└── security-checklist.md
 uploads/                # storage privado (gitignored)
 ```
 
@@ -105,6 +113,13 @@ npm run test              # vitest
 npm run test:e2e          # playwright
 ```
 
-## Deploy
+## Documentación
 
-Ver [`docs/deploy-cpanel.md`](docs/deploy-cpanel.md).
+- [`docs/HANDOFF.md`](docs/HANDOFF.md) — handoff técnico completo
+  (estado del proyecto, reglas operativas, decisiones, cómo retomar).
+- [`docs/deploy-cpanel.md`](docs/deploy-cpanel.md) — deploy desde cero
+  en cPanel.
+- [`docs/runbook.md`](docs/runbook.md) — operación: crons, backups,
+  errores comunes, checklist de go-live.
+- [`docs/security-checklist.md`](docs/security-checklist.md) —
+  revisión de seguridad pre-release.
