@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, roleProcedure } from "../trpc";
+import { router, roleProcedure, publicProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const adminOnly = () => roleProcedure("admin");
+// Las lecturas de catálogos son públicas: el registro de alumno y
+// formularios server-side las necesitan para llenar selects, y no
+// hay datos sensibles.
+const readCatalog = () => publicProcedure;
 
 const idIn = z.object({ id: z.string().min(1) });
 
@@ -12,7 +16,7 @@ const idIn = z.object({ id: z.string().min(1) });
 // Titulaciones
 // ---------------------------------------------------------------
 export const titulacionesRouter = router({
-  list: adminOrBedel()
+  list: readCatalog()
     .input(z.object({ includeDeleted: z.boolean().default(false) }).optional())
     .query(({ ctx, input }) =>
       ctx.db.titulacion.findMany({
@@ -62,7 +66,7 @@ export const titulacionesRouter = router({
 // Sindicatos
 // ---------------------------------------------------------------
 export const sindicatosRouter = router({
-  list: adminOrBedel()
+  list: readCatalog()
     .input(z.object({ includeDeleted: z.boolean().default(false) }).optional())
     .query(({ ctx, input }) =>
       ctx.db.sindicato.findMany({
@@ -110,7 +114,7 @@ export const sindicatosRouter = router({
 // Categorías de Curso
 // ---------------------------------------------------------------
 export const categoriasRouter = router({
-  list: adminOrBedel()
+  list: readCatalog()
     .input(z.object({ includeDeleted: z.boolean().default(false) }).optional())
     .query(({ ctx, input }) =>
       ctx.db.categoriaCurso.findMany({
@@ -155,7 +159,7 @@ export const categoriasRouter = router({
 // Tipos de Documentación
 // ---------------------------------------------------------------
 export const tiposDocumentacionRouter = router({
-  list: adminOrBedel()
+  list: readCatalog()
     .input(z.object({ includeDeleted: z.boolean().default(false) }).optional())
     .query(({ ctx, input }) =>
       ctx.db.tipoDocumentacion.findMany({
@@ -197,7 +201,7 @@ export const tiposDocumentacionRouter = router({
 // Estados de Documentación
 // ---------------------------------------------------------------
 export const estadosDocRouter = router({
-  list: adminOrBedel().query(({ ctx }) => ctx.db.estadoDocumentacion.findMany({ where: { deletedAt: null } })),
+  list: readCatalog().query(({ ctx }) => ctx.db.estadoDocumentacion.findMany({ where: { deletedAt: null } })),
   create: adminOnly()
     .input(z.object({ code: z.string().min(2).max(40), label: z.string().min(2).max(120), color: z.string() }))
     .mutation(({ ctx, input }) => ctx.db.estadoDocumentacion.create({ data: input })),
@@ -211,13 +215,13 @@ export const estadosDocRouter = router({
 // ---------------------------------------------------------------
 export const motivosRouter = router({
   doc: router({
-    list: adminOrBedel().query(({ ctx }) => ctx.db.motivoRechazoDocumentacion.findMany({ where: { deletedAt: null }, orderBy: { label: "asc" } })),
+    list: readCatalog().query(({ ctx }) => ctx.db.motivoRechazoDocumentacion.findMany({ where: { deletedAt: null }, orderBy: { label: "asc" } })),
     create: adminOnly().input(z.object({ label: z.string().min(2).max(200) })).mutation(({ ctx, input }) => ctx.db.motivoRechazoDocumentacion.create({ data: input })),
     update: adminOnly().input(idIn.extend({ label: z.string().min(2), active: z.boolean() })).mutation(({ ctx, input }) => ctx.db.motivoRechazoDocumentacion.update({ where: { id: input.id }, data: { label: input.label, active: input.active } })),
     softDelete: adminOnly().input(idIn).mutation(({ ctx, input }) => ctx.db.motivoRechazoDocumentacion.update({ where: { id: input.id }, data: { deletedAt: new Date() } })),
   }),
   inscripcion: router({
-    list: adminOrBedel().query(({ ctx }) => ctx.db.motivoRechazoInscripcion.findMany({ where: { deletedAt: null }, orderBy: { label: "asc" } })),
+    list: readCatalog().query(({ ctx }) => ctx.db.motivoRechazoInscripcion.findMany({ where: { deletedAt: null }, orderBy: { label: "asc" } })),
     create: adminOnly().input(z.object({ label: z.string().min(2).max(200) })).mutation(({ ctx, input }) => ctx.db.motivoRechazoInscripcion.create({ data: input })),
     update: adminOnly().input(idIn.extend({ label: z.string().min(2), active: z.boolean() })).mutation(({ ctx, input }) => ctx.db.motivoRechazoInscripcion.update({ where: { id: input.id }, data: { label: input.label, active: input.active } })),
     softDelete: adminOnly().input(idIn).mutation(({ ctx, input }) => ctx.db.motivoRechazoInscripcion.update({ where: { id: input.id }, data: { deletedAt: new Date() } })),
@@ -228,7 +232,7 @@ export const motivosRouter = router({
 // Tipos de Documento de Identidad
 // ---------------------------------------------------------------
 export const tiposDocIdRouter = router({
-  list: adminOrBedel().query(({ ctx }) => ctx.db.tipoDocumentoIdentidad.findMany({ where: { deletedAt: null }, orderBy: { code: "asc" } })),
+  list: readCatalog().query(({ ctx }) => ctx.db.tipoDocumentoIdentidad.findMany({ where: { deletedAt: null }, orderBy: { code: "asc" } })),
   create: adminOnly()
     .input(z.object({ code: z.string().min(2).max(20), label: z.string().min(2).max(80) }))
     .mutation(({ ctx, input }) => ctx.db.tipoDocumentoIdentidad.create({ data: input })),
