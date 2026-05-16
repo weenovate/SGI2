@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
+import { invalidateEmailConfigCache, sendEmail, renderBaseTemplate } from "@/lib/email";
 import { TRPCError } from "@trpc/server";
 
 const adminOnly = () => roleProcedure("admin");
@@ -42,6 +43,7 @@ export const settingsRouter = router({
         before: before.value,
         after: updated.value,
       });
+      if (input.key.startsWith("notifications.")) invalidateEmailConfigCache();
       return updated;
     }),
 
@@ -69,7 +71,30 @@ export const settingsRouter = router({
           after: u.value,
         });
       }
+      if (input.some((i) => i.key.startsWith("notifications."))) invalidateEmailConfigCache();
       return results;
+    }),
+
+  // Envía un mail de prueba con la configuración actual. Devuelve
+  // ok+id si llegó al provider, o el mensaje de error si falló.
+  testEmail: adminOnly()
+    .input(z.object({ to: z.string().email() }))
+    .mutation(async ({ input }) => {
+      // Forzamos relectura de la config (admin recién guardó settings).
+      invalidateEmailConfigCache();
+      try {
+        const res = await sendEmail({
+          to: input.to,
+          subject: "Prueba de envío — SGI FuENN",
+          html: renderBaseTemplate({
+            title: "Prueba de envío",
+            bodyHtml: "<p>Si recibís este mensaje, la configuración de notificaciones del SGI está funcionando correctamente.</p>",
+          }),
+        });
+        return { ok: true, id: res.id };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
     }),
 });
 
@@ -83,6 +108,7 @@ function coerceValue(type: string, value: unknown) {
     case "richtext":
     case "time":
     case "select":
+    case "password":
       return String(value ?? "");
     case "multiselect":
       return Array.isArray(value) ? value : [];

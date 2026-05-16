@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Save } from "lucide-react";
+import { Eye, EyeOff, Mail, Save } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
@@ -109,9 +109,12 @@ export function ConfigPanel() {
                 <SettingField key={s.key} setting={s} value={draft[s.key]} onChange={(v) => setField(s.key, v)} />
               ))}
             </div>
-            <Button onClick={() => saveCategory(c)} disabled={upsertMany.isPending}>
-              <Save className="h-4 w-4" /> {upsertMany.isPending ? "Guardando…" : "Guardar cambios"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => saveCategory(c)} disabled={upsertMany.isPending}>
+                <Save className="h-4 w-4" /> {upsertMany.isPending ? "Guardando…" : "Guardar cambios"}
+              </Button>
+              {c === "notificaciones" && <TestEmailButton />}
+            </div>
           </TabsContent>
         ))}
       </Tabs>
@@ -228,6 +231,40 @@ function SettingField({ setting, value, onChange }: { setting: Setting; value: u
         </div>
       );
   }
+}
+
+function TestEmailButton() {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState("");
+  const send = api.settings.testEmail.useMutation();
+  async function run() {
+    if (!to) return;
+    const res = await send.mutateAsync({ to });
+    if (res.ok) toast.success("Email de prueba enviado", `ID: ${res.id ?? "—"}. Revisá la casilla destino.`);
+    else toast.error("No se pudo enviar", res.error);
+    setOpen(false);
+  }
+  if (!open) {
+    return (
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Mail className="h-4 w-4" /> Probar envío
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        placeholder="destinatario@email.com"
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        className="w-72"
+      />
+      <Button onClick={run} disabled={send.isPending || !to}>
+        {send.isPending ? "Enviando…" : "Enviar"}
+      </Button>
+      <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+    </div>
+  );
 }
 
 function PasswordSetting({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
