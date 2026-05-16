@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { UserMenu } from "@/components/user-menu";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { APP_VERSION } from "@/lib/version";
 
 export default async function AlumnoLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export default async function AlumnoLayout({ children }: { children: React.React
             <Link href="/calendario" className="hover:underline">Calendario</Link>
             <Link href="/mis-inscripciones" className="hover:underline">Mis inscripciones</Link>
             <Link href="/mi-documentacion" className="hover:underline">Mi documentación</Link>
+            <ThemeSwitcher />
             <NotificationsBell />
             <UserMenu
               name={session.user.name ?? session.user.email ?? "Usuario"}

@@ -3,6 +3,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { auth } from "@/lib/auth";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { UserMenu } from "@/components/user-menu";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { APP_VERSION } from "@/lib/version";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,7 @@ export default async function PublicLayout({ children }: { children: React.React
                     <Link href="/mi-documentacion" className="hover:underline hidden sm:inline">Mi documentación</Link>
                   </>
                 )}
+                <ThemeSwitcher />
                 <NotificationsBell />
                 <UserMenu
                   name={user.name ?? user.email ?? "Usuario"}

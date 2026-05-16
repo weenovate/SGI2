@@ -22,15 +22,17 @@ const ToastViewport = React.forwardRef<
 ));
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
+// Toasts: usan los tokens del tema (no colores tailwind hardcoded)
+// para que sigan a la paleta activa.
 const toastVariants = cva(
-  "pointer-events-auto group relative flex w-full items-start gap-3 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
+  "pointer-events-auto group relative flex w-full items-start gap-3 overflow-hidden rounded-md border-l-4 border-y border-r p-4 pr-8 shadow-lg backdrop-blur-sm",
   {
     variants: {
       variant: {
-        info: "border-sky-200 bg-sky-50 text-sky-900",
-        success: "border-emerald-200 bg-emerald-50 text-emerald-900",
-        warning: "border-amber-200 bg-amber-50 text-amber-900",
-        critical: "border-red-200 bg-red-50 text-red-900",
+        info: "border-l-info border-y-border border-r-border bg-info/10 text-foreground",
+        success: "border-l-success border-y-border border-r-border bg-success/10 text-foreground",
+        warning: "border-l-warning border-y-border border-r-border bg-warning/10 text-foreground",
+        critical: "border-l-destructive border-y-border border-r-border bg-destructive/10 text-foreground",
       },
     },
     defaultVariants: { variant: "info" },
@@ -86,13 +88,13 @@ ToastDescription.displayName = ToastPrimitives.Description.displayName;
 export function ToastIcon({ variant }: { variant: "info" | "success" | "warning" | "critical" }) {
   switch (variant) {
     case "success":
-      return <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />;
+      return <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />;
     case "warning":
-      return <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />;
+      return <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />;
     case "critical":
-      return <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />;
+      return <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />;
     default:
-      return <Info className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />;
+      return <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />;
   }
 }
 

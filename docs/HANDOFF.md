@@ -355,6 +355,30 @@ y la suite vitest creció de 7 a **25 tests**. El code review encontró
 - Las nuevas claves de settings se cargan corriendo `npm run db:seed` (idempotente: usa `upsert` por `key`).
 - El tipo `password` se persiste como string plano en `Setting.value` (igual que el resto de los settings; el modelo no soporta cifrado de columnas). Para producción real conviene cargar la API key / contraseña SMTP por env var y dejar el campo del UI vacío. La UX del `eye/eye-off` evita exposición accidental.
 
+### Iteración #6 — Sistema de temas (v1.2.0)
+
+3 temas + selector por usuario y global:
+
+- **Mar del Plata** (claro náutico, default): primary azul institucional + accent cyan.
+- **Atardecer** (claro cálido): primary terracota + accent teal.
+- **Medianoche** (oscuro náutico): bg navy + accent cyan/dorado.
+
+Implementación:
+- `src/app/globals.css`: tres bloques `.theme-mar`, `.theme-sunset`, `.theme-midnight` con tokens HSL. Cada bloque define `--background`, `--foreground`, `--primary`, `--accent`, `--success`, `--warning`, `--info`, etc. más `color-scheme` para que el browser conozca light/dark.
+- `tailwind.config.ts`: tokens `success`, `warning`, `info`, `critical` ahora consumen las variables (antes eran colores tailwind hardcoded).
+- `Badge` rediseñado al estilo "soft pill" (`bg-X/15` + `text-X` + `ring-X/30`) para que cada estado tenga un color sin parecer un botón sólido.
+- `Button` con sombras sutiles y un `active:translate-y-px` para feedback táctil.
+- `Toast` reemplaza los colores tailwind (`bg-sky-50`...) por los tokens, con border-left de 4px del color de estado.
+- `src/lib/theme.ts`: helpers + tipos (`ThemeKey`, `THEME_META`).
+- `User.themePreference` (nullable): preferencia personal. Si está vacío hereda del Setting `appearance.theme`.
+- `users.myTheme` (query) + `users.setMyTheme` (mutation): cualquier usuario logueado.
+- `<ThemeSwitcher>`: ícono de paleta en navbar de los tres layouts. Dropdown con los 3 temas + "Usar tema global". Cambio instantáneo (intercambia clase de `<html>`) + persistencia en DB.
+- Root layout (`src/app/layout.tsx`): resuelve el tema server-side (`User.themePreference` → `Setting "appearance.theme"` → `"mar"`) y pinta la clase en `<html>` antes del primer paint (sin FOUC).
+- Config admin: nueva categoría **"Apariencia"** con el selector del tema default global.
+- Labels legibles para slugs en selects de Configuración (mapeo `SELECT_LABELS`).
+
+**Migración**: requiere `prisma db push` (nuevo campo `User.themePreference`). Luego `npm run db:seed` para crear el setting `appearance.theme`.
+
 ### Iteración #5 — Calendario (cierre + pill X/Y), login limpio, versionado
 
 4 ítems:

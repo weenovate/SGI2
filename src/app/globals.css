@@ -2,57 +2,127 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tokens de tema. Tres paletas: dos claras (mar, sunset) y una oscura
+ * (midnight). El layout raíz aplica una clase `theme-*` en <html>;
+ * los componentes usan `bg-primary`, `text-foreground`, etc. y se
+ * adaptan automáticamente.
+ *
+ * Tokens semánticos extra (success / warning / info) están definidos
+ * acá y consumidos por Badge / Button / toast.
+ */
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+  :root,
+  .theme-mar {
+    /* Mar del Plata — claro náutico institucional */
+    --background: 213 33% 97%;
+    --foreground: 220 35% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 220 35% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    /* Azul náutico institucional FuENN (placeholder hasta recibir branding) */
-    --primary: 211 80% 28%;
+    --popover-foreground: 220 35% 14%;
+    --primary: 213 78% 24%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 220 35% 14%;
+    --muted: 210 30% 94%;
+    --muted-foreground: 215 16% 38%;
     --accent: 199 89% 48%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 50%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 211 80% 28%;
+    --destructive: 348 83% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 64% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 92% 50%;
+    --warning-foreground: 30 60% 12%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 199 89% 48%;
     --radius: 0.5rem;
+
+    color-scheme: light;
   }
 
-  .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 10%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 199 89% 56%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 32% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 32% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 199 89% 48%;
+  .theme-sunset {
+    /* Atardecer — claro cálido */
+    --background: 30 60% 98%;
+    --foreground: 24 35% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 35% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 35% 14%;
+    --primary: 18 88% 48%;
+    --primary-foreground: 30 60% 98%;
+    --secondary: 28 50% 92%;
+    --secondary-foreground: 24 35% 14%;
+    --muted: 28 50% 94%;
+    --muted-foreground: 24 18% 38%;
+    --accent: 188 90% 36%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 32% 22%;
-    --input: 217 32% 22%;
-    --ring: 199 89% 56%;
+    --destructive: 348 75% 38%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 85 65% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 92% 42%;
+    --warning-foreground: 30 60% 96%;
+    --info: 188 90% 36%;
+    --info-foreground: 0 0% 100%;
+    --border: 28 40% 88%;
+    --input: 28 40% 88%;
+    --ring: 18 88% 48%;
+    --radius: 0.5rem;
+
+    color-scheme: light;
+  }
+
+  .theme-midnight,
+  .dark {
+    /* Medianoche — oscuro náutico nocturno */
+    --background: 218 60% 9%;
+    --foreground: 213 34% 92%;
+    --card: 219 50% 12%;
+    --card-foreground: 213 34% 92%;
+    --popover: 219 50% 12%;
+    --popover-foreground: 213 34% 92%;
+    --primary: 199 89% 60%;
+    --primary-foreground: 218 60% 9%;
+    --secondary: 218 40% 18%;
+    --secondary-foreground: 213 34% 92%;
+    --muted: 218 40% 18%;
+    --muted-foreground: 215 20% 70%;
+    --accent: 43 96% 56%;
+    --accent-foreground: 218 60% 9%;
+    --destructive: 0 84% 65%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 64% 52%;
+    --success-foreground: 218 60% 9%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 218 60% 9%;
+    --info: 199 89% 60%;
+    --info-foreground: 218 60% 9%;
+    --border: 218 35% 22%;
+    --input: 218 35% 22%;
+    --ring: 199 89% 60%;
+    --radius: 0.5rem;
+
+    color-scheme: dark;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground antialiased; }
-  /* Marcador para soft-delete visible solo a Admin (HU "Otros Requerimientos") */
+  /* Marcador para soft-delete visible solo a Admin */
   .deleted-row { @apply text-destructive; }
+}
+
+@layer components {
+  /* Tinte sutil por estado en cards (border-left + bg leve). El color
+     se pasa via class `card-tint-{success|warning|destructive|info}`. */
+  .card-tint-success { border-left-width: 3px; border-left-color: hsl(var(--success)); }
+  .card-tint-warning { border-left-width: 3px; border-left-color: hsl(var(--warning)); }
+  .card-tint-destructive { border-left-width: 3px; border-left-color: hsl(var(--destructive)); }
+  .card-tint-info { border-left-width: 3px; border-left-color: hsl(var(--info)); }
 }

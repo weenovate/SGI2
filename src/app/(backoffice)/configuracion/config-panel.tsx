@@ -23,6 +23,26 @@ const categoryLabels: Record<string, string> = {
   auditoria: "Auditoría",
   asistencia: "Asistencia y calificaciones",
   branding: "Branding",
+  apariencia: "Apariencia",
+};
+
+// Etiquetas legibles para los settings de tipo select (cuando los
+// options vienen como slugs internos como "mar"/"sunset"/"midnight").
+const SELECT_LABELS: Record<string, Record<string, string>> = {
+  "appearance.theme": {
+    mar: "Mar del Plata (claro náutico)",
+    sunset: "Atardecer (claro cálido)",
+    midnight: "Medianoche (oscuro)",
+  },
+  "notifications.smtp.security": {
+    none: "Sin cifrado",
+    ssl: "SSL",
+    starttls: "STARTTLS",
+  },
+  "notifications.client": {
+    smtp: "SMTP propio",
+    resend: "Resend",
+  },
 };
 
 type Setting = {
@@ -171,7 +191,8 @@ function SettingField({ setting, value, onChange }: { setting: Setting; value: u
           <Textarea value={typeof value === "string" ? value : JSON.stringify(value ?? {}, null, 2)} onChange={(e) => onChange(e.target.value)} />
         </div>
       );
-    case "select":
+    case "select": {
+      const labels = SELECT_LABELS[setting.key] ?? {};
       return (
         <div className="space-y-1">
           <Label>{setting.label}</Label>
@@ -179,12 +200,13 @@ function SettingField({ setting, value, onChange }: { setting: Setting; value: u
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {(setting.metadata?.options ?? []).map((opt) => (
-                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                <SelectItem key={opt} value={opt}>{labels[opt] ?? opt}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       );
+    }
     case "multiselect":
       return (
         <div className="space-y-1">

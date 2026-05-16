@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { APP_VERSION } from "@/lib/version";
 
 export default async function BackofficeLayout({ children }: { children: React.ReactNode }) {
@@ -53,6 +54,7 @@ export default async function BackofficeLayout({ children }: { children: React.R
       <div className="flex-1 flex flex-col">
         <header className="border-b bg-white">
           <div className="h-14 flex items-center justify-end gap-3 px-6">
+            <ThemeSwitcher />
             <NotificationsBell />
             <span className="text-sm text-muted-foreground">
               {session?.user?.name ?? "Sin sesión"}

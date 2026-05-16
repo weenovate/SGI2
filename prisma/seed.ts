@@ -322,6 +322,8 @@ async function seedSettings() {
       label: "Tipos de notificación habilitados",
       type: "multiselect",
     },
+    { key: "appearance.theme", value: "mar", category: "apariencia", label: "Tema por defecto del sistema", type: "select", metadata: { options: ["mar", "sunset", "midnight"] } },
+
     { key: "notifications.client", value: "resend", category: "notificaciones", label: "Método de envío", type: "select", metadata: { options: ["smtp", "resend"] } },
 
     // SMTP

@@ -1,15 +1,42 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
-import { router, roleProcedure } from "../trpc";
+import { router, roleProcedure, protectedProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
 import { userPublicSelect } from "../selects";
+import { THEME_KEYS } from "@/lib/theme";
 
 const adminOnly = () => roleProcedure("admin");
 
 const adminBackofficeRoles = ["admin", "bedel", "manager"] as const;
 
 export const usersRouter = router({
+  // Preferencia de tema personal (cualquier usuario logueado).
+  myTheme: protectedProcedure.query(async ({ ctx }) => {
+    const [user, setting] = await Promise.all([
+      ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { themePreference: true } }),
+      ctx.db.setting.findUnique({ where: { key: "appearance.theme" } }),
+    ]);
+    const fallback = (typeof setting?.value === "string" && (THEME_KEYS as readonly string[]).includes(setting.value))
+      ? (setting.value as string)
+      : "mar";
+    return {
+      personal: user?.themePreference ?? null,
+      global: fallback,
+      effective: user?.themePreference ?? fallback,
+    };
+  }),
+
+  setMyTheme: protectedProcedure
+    .input(z.object({ theme: z.enum(THEME_KEYS).nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.user.update({
+        where: { id: ctx.session.user.id },
+        data: { themePreference: input.theme },
+      });
+      return { ok: true };
+    }),
+
   list: adminOnly()
     .input(
       z

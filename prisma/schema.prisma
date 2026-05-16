@@ -115,6 +115,8 @@ model User {
   lastLoginAt     DateTime?
   failedAttempts  Int        @default(0)
   lockedUntil     DateTime?
+  // null = usar el tema default de Setting "appearance.theme".
+  themePreference String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   deletedAt       DateTime?
