@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { signOut } from "next-auth/react";
+import { Eye, EyeOff } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { toast } from "@/lib/toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function MyDataForm() {
   return (
@@ -29,18 +32,29 @@ export function MyDataForm() {
 
 function PerfilTab() {
   const me = api.students.me.useQuery();
+  const tiposDocId = api.tiposDocId.list.useQuery();
   const titulaciones = api.titulaciones.list.useQuery();
   const sindicatos = api.sindicatos.list.useQuery();
   const empresas = api.companies.listForStudents.useQuery();
-  const provincias = api.geo.provincias.useQuery({ paisId: "ARG" });
   const update = api.students.updateProfile.useMutation({ onSuccess: () => toast.success("Datos guardados") });
   const [form, setForm] = useState({
     firstName: "", lastName: "", birthDate: "", nationality: "",
     titulacionId: "", empresaId: "", sindicatoId: "", phone: "",
-    countryId: "ARG", provinciaId: "", localidadId: "",
+    countryId: "ARG", provinciaId: "", localidadId: "", postalCode: "",
     street: "", streetNumber: "", floor: "", unit: "",
   });
-  const localidades = api.geo.localidades.useQuery({ provinciaId: form.provinciaId }, { enabled: !!form.provinciaId });
+
+  const provincias = api.geo.provincias.useQuery({ paisId: "ARG" });
+  // Localidades de la provincia seleccionada (para el select);
+  // si hay CP cargado, se prefieren las matcheadas por CP.
+  const localidades = api.geo.localidades.useQuery(
+    { provinciaId: form.provinciaId },
+    { enabled: !!form.provinciaId },
+  );
+  const cpMatches = api.geo.findByPostalCode.useQuery(
+    { code: form.postalCode },
+    { enabled: form.postalCode.length >= 4 },
+  );
 
   useEffect(() => {
     if (me.data) {
@@ -56,6 +70,7 @@ function PerfilTab() {
         countryId: me.data.studentProfile?.countryId ?? "ARG",
         provinciaId: me.data.studentProfile?.provinciaId ?? "",
         localidadId: me.data.studentProfile?.localidadId ?? "",
+        postalCode: me.data.studentProfile?.postalCode ?? "",
         street: me.data.studentProfile?.street ?? "",
         streetNumber: me.data.studentProfile?.streetNumber ?? "",
         floor: me.data.studentProfile?.floor ?? "",
@@ -63,6 +78,83 @@ function PerfilTab() {
       });
     }
   }, [me.data]);
+
+  const tipoDocLabel = useMemo(() => {
+    const id = me.data?.studentProfile?.docTypeId;
+    if (!id) return "";
+    return tiposDocId.data?.find((t) => t.id === id)?.label ?? "";
+  }, [me.data, tiposDocId.data]);
+
+  // Cuando cambia el CP: si hay matches, autocompletar provincia y
+  // preseleccionar la localidad (la primera GeoRef matcheada).
+  function onPostalCodeChange(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    setForm((f) => ({ ...f, postalCode: digits }));
+  }
+
+  // Efecto: al recibir resultados del CP, aplicar autocomplete
+  useEffect(() => {
+    const data = cpMatches.data;
+    if (!data || data.length === 0) return;
+    // Si todos los matches comparten provincia, fijamos provincia
+    const provIds = new Set(data.map((m) => m.provinciaId));
+    if (provIds.size === 1) {
+      const provinciaId = data[0]!.provinciaId;
+      // Buscar primer match con georefLocalidadId resuelto
+      const firstGeoref = data.find((m) => m.georefLocalidadId);
+      setForm((f) => {
+        if (f.provinciaId === provinciaId && (firstGeoref ? f.localidadId === firstGeoref.georefLocalidadId : true)) {
+          return f;
+        }
+        return {
+          ...f,
+          provinciaId,
+          localidadId: firstGeoref?.georefLocalidadId ?? "",
+        };
+      });
+    }
+  }, [cpMatches.data]);
+
+  // Cuando cambia la localidad: setear provincia (siempre derivada) y,
+  // si la Localidad tiene postalCode representativo, autocompletarlo.
+  const localidadByIdQ = api.geo.localidadById.useQuery(
+    { id: form.localidadId },
+    { enabled: !!form.localidadId },
+  );
+  useEffect(() => {
+    const loc = localidadByIdQ.data;
+    if (!loc) return;
+    setForm((f) => {
+      const next = { ...f };
+      if (f.provinciaId !== loc.provinciaId) next.provinciaId = loc.provinciaId;
+      if (loc.postalCode && !f.postalCode) next.postalCode = loc.postalCode;
+      return next;
+    });
+  }, [localidadByIdQ.data]);
+
+  // Lista de localidades a mostrar:
+  // - Si hay CP con matches que tienen georefLocalidadId, usamos esos.
+  // - Si no, todas las de la provincia.
+  const localidadOptions = useMemo(() => {
+    const cp = cpMatches.data;
+    if (cp && cp.length > 0) {
+      const matchedGeo = cp.filter((m) => m.georefLocalidadId);
+      if (matchedGeo.length > 0) {
+        return matchedGeo.map((m) => ({ id: m.georefLocalidadId!, name: m.georefLocalidadName ?? m.localidadName }));
+      }
+    }
+    return localidades.data?.map((l) => ({ id: l.id, name: l.name })) ?? [];
+  }, [cpMatches.data, localidades.data]);
+
+  // Provincia label efectiva: priorizamos la localidad consultada; luego
+  // el CP; finalmente la lista de provincias completa.
+  const provinciaLabel = useMemo(() => {
+    if (localidadByIdQ.data?.provincia.name) return localidadByIdQ.data.provincia.name;
+    const cpMatch = cpMatches.data?.find((m) => m.provinciaId === form.provinciaId);
+    if (cpMatch) return cpMatch.provinciaName;
+    const p = provincias.data?.find((x) => x.id === form.provinciaId);
+    return p?.name ?? "";
+  }, [localidadByIdQ.data, cpMatches.data, form.provinciaId, provincias.data]);
 
   return (
     <Card>
@@ -73,7 +165,7 @@ function PerfilTab() {
       <CardContent className="grid grid-cols-2 gap-3">
         <div><Label>Nombres</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
         <div><Label>Apellidos</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
-        <div><Label>Tipo doc</Label><Input disabled value={me.data?.studentProfile?.docTypeId ?? ""} /></div>
+        <div><Label>Tipo doc</Label><Input disabled value={tipoDocLabel} /></div>
         <div><Label>Nº documento</Label><Input disabled value={me.data?.studentProfile?.docNumber ?? ""} /></div>
         <div><Label>Fecha de nacimiento</Label><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></div>
         <div><Label>Nacionalidad</Label><Input value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} /></div>
@@ -110,30 +202,37 @@ function PerfilTab() {
         <div className="col-span-2"><Label>Teléfono</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
 
         <div className="col-span-2 mt-4 font-medium text-sm">Dirección</div>
-        <div>
-          <Label>Provincia</Label>
-          <Select value={form.provinciaId || "_"} onValueChange={(v) => setForm({ ...form, provinciaId: v === "_" ? "" : v, localidadId: "" })}>
-            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_">—</SelectItem>
-              {provincias.data?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Localidad</Label>
-          <Select value={form.localidadId || "_"} onValueChange={(v) => setForm({ ...form, localidadId: v === "_" ? "" : v })} disabled={!form.provinciaId}>
-            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_">—</SelectItem>
-              {localidades.data?.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
         <div className="col-span-2"><Label>Calle</Label><Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></div>
         <div><Label>Altura</Label><Input value={form.streetNumber} onChange={(e) => setForm({ ...form, streetNumber: e.target.value })} /></div>
         <div><Label>Piso</Label><Input value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} /></div>
         <div><Label>Depto</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
+        <div>
+          <Label>Cód. postal</Label>
+          <Input
+            inputMode="numeric"
+            value={form.postalCode}
+            onChange={(e) => onPostalCodeChange(e.target.value)}
+            placeholder="1425"
+          />
+        </div>
+        <div>
+          <Label>Localidad</Label>
+          <Select
+            value={form.localidadId || "_"}
+            onValueChange={(v) => setForm({ ...form, localidadId: v === "_" ? "" : v })}
+            disabled={localidadOptions.length === 0}
+          >
+            <SelectTrigger><SelectValue placeholder={localidadOptions.length === 0 ? "Cargá CP o provincia" : "—"} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_">—</SelectItem>
+              {localidadOptions.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="col-span-2">
+          <Label>Provincia</Label>
+          <Input disabled value={provinciaLabel} placeholder="Se completa al elegir localidad" />
+        </div>
 
         <div className="col-span-2">
           <Button onClick={() => update.mutate({
@@ -148,6 +247,7 @@ function PerfilTab() {
             countryId: form.countryId || null,
             provinciaId: form.provinciaId || null,
             localidadId: form.localidadId || null,
+            postalCode: form.postalCode || null,
             street: form.street || null,
             streetNumber: form.streetNumber || null,
             floor: form.floor || null,
@@ -176,7 +276,7 @@ function EmailTab() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div><Label>Nuevo email</Label><Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></div>
-        <div><Label>Tu contraseña actual</Label><Input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} /></div>
+        <PasswordInput label="Tu contraseña actual" value={pwd} onChange={setPwd} />
         {error && <p className="text-sm text-destructive">{error}</p>}
         {done && <p className="text-sm text-emerald-700">Te enviamos el enlace de confirmación.</p>}
         <Button onClick={async () => {
@@ -194,21 +294,64 @@ function PasswordTab() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Cambiar contraseña</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        <div><Label>Contraseña actual</Label><Input type="password" value={cur} onChange={(e) => setCur(e.target.value)} /></div>
-        <div><Label>Nueva contraseña (mín. 8)</Label><Input type="password" value={next} onChange={(e) => setNext(e.target.value)} /></div>
+        <PasswordInput label="Contraseña actual" value={cur} onChange={setCur} />
+        <PasswordInput label="Nueva contraseña (mín. 8)" value={next} onChange={setNext} />
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {done && <p className="text-sm text-emerald-700">Contraseña actualizada.</p>}
         <Button onClick={async () => {
-          setError(null); setDone(false);
-          try { await change.mutateAsync({ currentPassword: cur, newPassword: next }); setDone(true); setCur(""); setNext(""); }
-          catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+          setError(null);
+          try {
+            await change.mutateAsync({ currentPassword: cur, newPassword: next });
+            setCur(""); setNext("");
+            setLogoutOpen(true);
+          } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
         }} disabled={change.isPending || next.length < 8}>{change.isPending ? "Guardando…" : "Cambiar contraseña"}</Button>
       </CardContent>
+
+      <Dialog open={logoutOpen}>
+        <DialogContent
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader><DialogTitle>Contraseña actualizada</DialogTitle></DialogHeader>
+          <p className="text-sm">
+            Por razones de seguridad vas a tener que iniciar sesión nuevamente con tu nueva contraseña.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => signOut({ callbackUrl: "/login" })}>Aceptar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
+  );
+}
+
+function PasswordInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="relative">
+        <Input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          aria-label={show ? "Ocultar" : "Mostrar"}
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
   );
 }

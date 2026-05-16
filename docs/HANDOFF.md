@@ -322,6 +322,22 @@ y la suite vitest creció de 7 a **25 tests**. El code review encontró
 - **OCR slow start de Tesseract**: documentado en sección 13. Requiere
   warmup post-deploy.
 
+### Iteración #3 — Inscripciones backoffice (preview modal) + Mis Datos (CP, password)
+
+7 ítems del cliente:
+
+| # | Tema | Cambio |
+| - | ---- | ------ |
+| 1 | Snapshot de documentación con miniaturas + modal | `enrollments.byId` ahora resuelve `tipoDocumentacion` + `FileObject[]` desde el CSV de `fileObjectIds`. UI en `enrollment-detail.tsx`: grid de miniaturas (imagen real para `image/*`, ícono para PDF/otros) y dialog `FilePreviewDialog` con metadata (tipo, vencimiento, status, uploadedAt, archivo). |
+| 2 | Comprobantes de pago en modal | Eliminado `target="_blank"` en `PaymentItem`. El nombre ahora es un `<button>` que abre el mismo `FilePreviewDialog`. Imágenes inline, PDFs en iframe. |
+| 3 | "Tipo doc" mostraba el cuid | En `my-data.tsx` se agrega `api.tiposDocId.list.useQuery()` y se resuelve el label vía `useMemo`. |
+| 4 | Orden de Dirección | Reordenado a Calle / Altura / Piso / Depto / Cód. postal / Localidad / Provincia. Provincia ahora es un `<Input disabled>` (label, no editable). |
+| 5 | CP ↔ Localidad ↔ Provincia | Nuevo modelo `PostalCode` (code, provinciaId, localidadName) + `Localidad.postalCode` + `StudentProfile.postalCode`. Endpoints: `geo.findByPostalCode` (resuelve georefLocalidadId por match `(provinciaId, normalize(name))`) y `geo.localidadById`. UI: al tipear CP autocompleta provincia y preselecciona localidad GeoRef matcheada; al cambiar localidad, autocompleta CP (si la localidad tiene `postalCode`) y provincia (siempre). Dataset Correo Argentino commiteado en `prisma/data/localidades_cp_maestro.csv` (23k filas). Seed script `npm run db:seed:postal`. |
+| 6 | Show/hide password | Nuevo componente local `PasswordInput` con ícono `Eye/EyeOff` (lucide), aplicado en "Contraseña actual"/"Nueva contraseña" del tab `password` y en "Tu contraseña actual" del tab `email`. |
+| 7 | Re-login obligatorio tras cambio de password | Tras éxito de `changePassword`, abre Dialog modal con `onEscapeKeyDown` + `onPointerDownOutside` blockeados. Botón "Aceptar" llama `signOut({ callbackUrl: "/login" })`. |
+
+**Migración de DB requerida**: `npx prisma db push` en VPS para aplicar los nuevos campos. Luego correr `npm run db:seed:postal` una vez para cargar el dataset Correo Argentino y poblar `Localidad.postalCode`.
+
 ---
 
 ## 8. Convenciones de código y UI

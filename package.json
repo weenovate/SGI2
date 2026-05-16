@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:geo": "tsx prisma/seed-geo.ts",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
+    "db:seed:postal": "tsx prisma/seed-postal.ts",
     "test": "vitest",
     "test:e2e": "playwright test"
   },

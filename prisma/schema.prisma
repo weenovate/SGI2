@@ -202,6 +202,7 @@ model StudentProfile {
   countryId    String?
   provinciaId  String?
   localidadId  String?
+  postalCode   String?
   street       String?
   streetNumber String?
   floor        String?
@@ -353,9 +354,28 @@ model Localidad {
   provinciaId String
   provincia   Provincia @relation(fields: [provinciaId], references: [id])
   name        String
+  // CP representativo elegido al cruzar con el dataset Correo Argentino
+  // (puede ser null si no se encontró match exacto).
+  postalCode  String?
 
   @@index([provinciaId])
   @@index([name])
+  @@index([postalCode])
+}
+
+// Diccionario CP → localidad (Correo Argentino).
+// Un mismo CP puede mapear a varias localidades y viceversa (sobre todo
+// en CABA/GBA). El nombre se guarda tal cual aparece en Correo y se
+// resuelve a una Localidad de GeoRef por (provinciaId, name normalizado).
+model PostalCode {
+  id            Int    @id @default(autoincrement())
+  code          String
+  provinciaId   String
+  localidadName String
+
+  @@unique([code, provinciaId, localidadName])
+  @@index([code])
+  @@index([provinciaId, localidadName])
 }
 
 // Configuración global key/value (con categoría para agrupar tabs)

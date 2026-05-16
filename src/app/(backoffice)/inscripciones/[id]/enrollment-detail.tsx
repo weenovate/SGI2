@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Check, X, ArrowLeft } from "lucide-react";
+import { Check, X, ArrowLeft, FileText, File as FileIcon } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +21,16 @@ const statusLabel: Record<string, string> = {
   lista_espera: "Lista de espera",
 };
 
+const docStatusLabel: Record<string, string> = {
+  pendiente: "Pendiente",
+  aprobada: "Aprobada",
+  rechazada: "Rechazada",
+  vencida: "Vencida",
+};
+
+type SnapFile = { id: string; relPath: string; originalName: string; mime: string; size: number };
+type SnapshotData = { status?: string; uploadedAt?: string; expiresAt?: string | null };
+
 export function EnrollmentDetail({ id }: { id: string }) {
   const utils = api.useUtils();
   const q = api.enrollments.byId.useQuery({ id });
@@ -30,6 +40,7 @@ export function EnrollmentDetail({ id }: { id: string }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [motivoId, setMotivoId] = useState("");
   const [notes, setNotes] = useState("");
+  const [preview, setPreview] = useState<{ file: SnapFile; meta: SnapshotData; tipoLabel: string } | null>(null);
 
   if (q.isLoading) return <p className="text-muted-foreground">Cargando…</p>;
   if (!q.data) return <p className="text-destructive">No encontrada.</p>;
@@ -70,7 +81,7 @@ export function EnrollmentDetail({ id }: { id: string }) {
         <TabsList>
           <TabsTrigger value="alumno">Alumno</TabsTrigger>
           <TabsTrigger value="docs">Documentación (snapshot)</TabsTrigger>
-          <TabsTrigger value="pagos">Pagos</TabsTrigger>
+          <TabsTrigger value="pagos">Comprobantes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="alumno">
@@ -89,16 +100,41 @@ export function EnrollmentDetail({ id }: { id: string }) {
         <TabsContent value="docs">
           <Card>
             <CardHeader><CardTitle className="text-base">Documentación al momento de inscribirse</CardTitle></CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-3 text-sm">
               {e.snapshots.length === 0 && <p className="text-muted-foreground">Este curso no requería documentación.</p>}
               {e.snapshots.map((s) => {
-                const ids = s.fileObjectIds.split(",").filter(Boolean);
+                const meta = (s.data ?? {}) as SnapshotData;
+                const tipoLabel = s.tipo?.label ?? s.tipoDocumentacionId;
                 return (
-                  <div key={s.id} className="border rounded-md p-2">
-                    <p className="font-medium">{(s.data as { tipo?: string }).tipo ?? s.tipoDocumentacionId}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Archivos: {ids.length} — snapshot del {new Date(s.takenAt).toLocaleString("es-AR")}
-                    </p>
+                  <div key={s.id} className="border rounded-md p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{tipoLabel}</p>
+                      <span className="text-xs text-muted-foreground">
+                        Snapshot del {new Date(s.takenAt).toLocaleString("es-AR")}
+                      </span>
+                    </div>
+                    {meta.expiresAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Vencimiento: {new Date(meta.expiresAt).toLocaleDateString("es-AR")}
+                      </p>
+                    )}
+                    {s.files.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-2">Sin archivos en el snapshot.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                        {s.files.map((f) => (
+                          <button
+                            type="button"
+                            key={f.id}
+                            onClick={() => setPreview({ file: f, meta, tipoLabel })}
+                            className="border rounded-md p-2 text-left hover:bg-muted transition flex flex-col items-center gap-2"
+                          >
+                            <Thumb file={f} />
+                            <span className="text-xs truncate w-full" title={f.originalName}>{f.originalName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -129,8 +165,77 @@ export function EnrollmentDetail({ id }: { id: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FilePreviewDialog
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        file={preview?.file ?? null}
+        title={preview?.tipoLabel ?? ""}
+        meta={preview?.meta ?? null}
+      />
     </div>
   );
+}
+
+function Thumb({ file }: { file: SnapFile }) {
+  const url = `/api/files/${file.relPath}`;
+  if (file.mime.startsWith("image/")) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={file.originalName} className="h-24 w-full object-contain rounded-sm bg-muted" />;
+  }
+  if (file.mime === "application/pdf") {
+    return <FileText className="h-12 w-12 text-muted-foreground" aria-hidden />;
+  }
+  return <FileIcon className="h-12 w-12 text-muted-foreground" aria-hidden />;
+}
+
+function FilePreviewDialog({
+  open,
+  onClose,
+  file,
+  title,
+  meta,
+}: {
+  open: boolean;
+  onClose: () => void;
+  file: SnapFile | null;
+  title: string;
+  meta: SnapshotData | null;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{title || "Archivo"}</DialogTitle>
+        </DialogHeader>
+        {file && <FilePreviewBody file={file} />}
+        {meta && (
+          <div className="text-xs text-muted-foreground space-y-0.5 border-t pt-2 mt-1">
+            {meta.status && <p><strong>Estado:</strong> {docStatusLabel[meta.status] ?? meta.status}</p>}
+            {meta.uploadedAt && <p><strong>Subida:</strong> {new Date(meta.uploadedAt).toLocaleString("es-AR")}</p>}
+            {meta.expiresAt && <p><strong>Vencimiento:</strong> {new Date(meta.expiresAt).toLocaleDateString("es-AR")}</p>}
+            {file && <p><strong>Archivo:</strong> {file.originalName} — {(file.size / 1024).toFixed(0)} KB</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FilePreviewBody({ file }: { file: SnapFile }) {
+  const url = `/api/files/${file.relPath}`;
+  if (file.mime.startsWith("image/")) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={file.originalName} className="w-full max-h-[70vh] object-contain bg-muted rounded-sm" />;
+  }
+  if (file.mime === "application/pdf") {
+    return <iframe src={url} title={file.originalName} className="w-full h-[70vh] border rounded-sm" />;
+  }
+  // Otros tipos: previsualización inline con iframe (texto/plano, etc.) si el navegador lo soporta.
+  return <iframe src={url} title={file.originalName} className="w-full h-[70vh] border rounded-sm" />;
 }
 
 function PaymentsPanel({ enrollmentId }: { enrollmentId: string }) {
@@ -142,6 +247,7 @@ function PaymentsPanel({ enrollmentId }: { enrollmentId: string }) {
   const reject = api.payments.reject.useMutation({ onSuccess: () => utils.payments.list.invalidate() });
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [previewFile, setPreviewFile] = useState<SnapFile | null>(null);
 
   return (
     <Card>
@@ -156,6 +262,7 @@ function PaymentsPanel({ enrollmentId }: { enrollmentId: string }) {
             busy={approve.isPending || reject.isPending}
             onApprove={(data) => approve.mutate({ id: p.id, ...data })}
             onReject={() => { setRejectFor(p.id); setReason(""); }}
+            onPreview={(file) => setPreviewFile(file)}
           />
         ))}
       </CardContent>
@@ -174,15 +281,24 @@ function PaymentsPanel({ enrollmentId }: { enrollmentId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FilePreviewDialog
+        open={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        file={previewFile}
+        title={previewFile?.originalName ?? ""}
+        meta={null}
+      />
     </Card>
   );
 }
 
-function PaymentItem({ payment, busy, onApprove, onReject }: {
-  payment: { id: string; medio: string | null; fechaPago: Date | null; monto: { toString: () => string } | null; numeroOperacion: string | null; ocrScore: number | null; approved: boolean; rejectedReason: string | null; fileObject: { relPath: string; originalName: string }; uploadedAt: Date };
+function PaymentItem({ payment, busy, onApprove, onReject, onPreview }: {
+  payment: { id: string; medio: string | null; fechaPago: Date | null; monto: { toString: () => string } | null; numeroOperacion: string | null; ocrScore: number | null; approved: boolean; rejectedReason: string | null; fileObject: { id: string; relPath: string; originalName: string; mime: string; size: number }; uploadedAt: Date };
   busy: boolean;
   onApprove: (data: { medio?: string | null; fechaPago?: Date | null; monto?: string | null; numeroOperacion?: string | null }) => void;
   onReject: () => void;
+  onPreview: (file: SnapFile) => void;
 }) {
   const [form, setForm] = useState({
     medio: payment.medio ?? "",
@@ -196,9 +312,13 @@ function PaymentItem({ payment, busy, onApprove, onReject }: {
     <div className="border rounded-md p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div>
-          <a href={`/api/files/${payment.fileObject.relPath}`} target="_blank" rel="noreferrer" className="text-primary underline">
+          <button
+            type="button"
+            onClick={() => onPreview(payment.fileObject)}
+            className="text-primary underline hover:no-underline"
+          >
             {payment.fileObject.originalName}
-          </a>
+          </button>
           <span className="text-xs text-muted-foreground ml-2">subido el {new Date(payment.uploadedAt).toLocaleString("es-AR")}</span>
         </div>
         <div>

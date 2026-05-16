@@ -289,17 +289,58 @@ export const enrollmentsRouter = router({
 
   byId: adminOrBedel()
     .input(z.object({ id: z.string() }))
-    .query(({ ctx, input }) =>
-      ctx.db.enrollment.findUnique({
+    .query(async ({ ctx, input }) => {
+      const e = await ctx.db.enrollment.findUnique({
         where: { id: input.id },
         include: {
           instance: { include: { course: true, teacher: { include: { user: { select: userPublicSelect } } } } },
           student: { select: { ...userPublicSelect, studentProfile: true } },
           snapshots: true,
-          payments: true,
+          payments: { include: { fileObject: true } },
         },
-      }),
-    ),
+      });
+      if (!e) return null;
+
+      // Resolvemos los TipoDocumentacion y FileObject referenciados desde
+      // los snapshots para poder mostrar miniaturas + metadatos.
+      const tipoIds = Array.from(new Set(e.snapshots.map((s) => s.tipoDocumentacionId)));
+      const allFileIds = Array.from(
+        new Set(
+          e.snapshots.flatMap((s) =>
+            s.fileObjectIds
+              .split(",")
+              .map((id) => id.trim())
+              .filter(Boolean),
+          ),
+        ),
+      );
+      const [tipos, fileObjects] = await Promise.all([
+        tipoIds.length
+          ? ctx.db.tipoDocumentacion.findMany({ where: { id: { in: tipoIds } } })
+          : Promise.resolve([]),
+        allFileIds.length
+          ? ctx.db.fileObject.findMany({
+              where: { id: { in: allFileIds } },
+              select: { id: true, relPath: true, originalName: true, mime: true, size: true },
+            })
+          : Promise.resolve([]),
+      ]);
+      const tipoById = new Map(tipos.map((t) => [t.id, t]));
+      const fileById = new Map(fileObjects.map((f) => [f.id, f]));
+
+      const snapshots = e.snapshots.map((s) => ({
+        ...s,
+        tipo: tipoById.get(s.tipoDocumentacionId) ?? null,
+        files: s.fileObjectIds
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+          .map((id) => fileById.get(id))
+          .filter((f): f is NonNullable<typeof f> => Boolean(f)),
+      }));
+
+      return { ...e, snapshots };
+    }),
 
   approve: adminOrBedel()
     .input(z.object({ id: z.string() }))
