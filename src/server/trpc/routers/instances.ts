@@ -255,6 +255,9 @@ export const instancesRouter = router({
           const closeAt = new Date(it.startDate.getTime() - it.hoursBeforeClose * 3600_000);
           const daysToClose = Math.ceil((closeAt.getTime() - now.getTime()) / 86_400_000);
           const closingSoon = daysToClose >= 0 && daysToClose <= closingSoonDays;
+          // Visibilidad efectiva: master switch global AND la opción
+          // que el admin puede pisar por instancia.
+          const showVac = showVacancies && it.showVacancies;
 
           const status = {
             sinVacantes: free === 0,
@@ -270,7 +273,7 @@ export const instancesRouter = router({
             startDate: it.startDate,
             endDate: it.endDate,
             startTime: it.startTime,
-            showVacancies,
+            showVacancies: showVac,
             vacancies: it.vacancies,
             free,
             closeAt,
@@ -362,6 +365,9 @@ export const instancesRouter = router({
 
       const taken = inst._count.enrollments;
       const free = Math.max(0, inst.vacancies - taken);
+      const showVacanciesSetting = await ctx.db.setting.findUnique({ where: { key: "schedule.showVacancies" } });
+      const showVacanciesGlobal = showVacanciesSetting?.value !== false;
+      const closeAt = new Date(inst.startDate.getTime() - inst.hoursBeforeClose * 3600_000);
 
       return {
         id: inst.id,
@@ -371,7 +377,10 @@ export const instancesRouter = router({
         startDate: inst.startDate,
         endDate: inst.endDate,
         startTime: inst.startTime,
+        closeAt,
+        vacancies: inst.vacancies,
         free,
+        showVacancies: showVacanciesGlobal && inst.showVacancies,
         sinVacantes: free === 0,
         course: {
           id: inst.course.id,

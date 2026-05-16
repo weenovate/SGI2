@@ -43,7 +43,9 @@ export function CourseDetail({ id }: { id: string }) {
   const it = q.data;
   const meEmpresaId = me.data?.studentProfile?.empresaId ?? null;
 
-  const closeAt = new Date(new Date(it.startDate).getTime());
+  const closeAt = new Date(it.closeAt);
+  const closeHoursLeft = (closeAt.getTime() - Date.now()) / 3_600_000;
+  const closeUrgent = closeHoursLeft <= 48;
   const showWaitlistButton = it.sinVacantes;
 
   return (
@@ -64,7 +66,17 @@ export function CourseDetail({ id }: { id: string }) {
           {it.teacher && <p><strong>Docente:</strong> {it.teacher.name}</p>}
           <p>
             <strong>Inicio:</strong> {new Date(it.startDate).toLocaleDateString("es-AR")} {it.startTime ?? ""}<br />
-            <strong>Fin:</strong> {new Date(closeAt).toLocaleDateString("es-AR")}
+            <strong>Fin:</strong> {new Date(it.endDate).toLocaleDateString("es-AR")}<br />
+            <strong>Cierre inscripciones:</strong>{" "}
+            <span className={closeUrgent ? "text-destructive font-medium" : undefined}>
+              {closeAt.toLocaleDateString("es-AR")}
+            </span>
+            {it.showVacancies && (
+              <>
+                <br />
+                <strong>Vacantes:</strong> {it.free}/{it.vacancies}
+              </>
+            )}
           </p>
           {it.course.objectives && (
             <div>

@@ -180,6 +180,12 @@ function CardsView({ items }: { items: Item[] }) {
               <strong>Inicio:</strong> {new Date(it.startDate).toLocaleDateString("es-AR")}<br />
               <strong>Fin:</strong> {new Date(it.endDate).toLocaleDateString("es-AR")}<br />
               <strong>Cierre inscripciones:</strong> <CloseDate value={it.closeAt} />
+              {it.showVacancies && (
+                <>
+                  <br />
+                  <strong>Vacantes:</strong> {it.free}/{it.vacancies}
+                </>
+              )}
             </p>
             <PillsForItem s={it.status} />
           </CardContent>
@@ -207,6 +213,7 @@ function ListView({ items }: { items: Item[] }) {
           <TableHead>Cierre inscripciones</TableHead>
           <TableHead>Tipo</TableHead>
           <TableHead>Modalidad</TableHead>
+          <TableHead>Vacantes</TableHead>
           <TableHead>Estado</TableHead>
           <TableHead className="text-right">Acción</TableHead>
         </TableRow>
@@ -222,6 +229,7 @@ function ListView({ items }: { items: Item[] }) {
             <TableCell><CloseDate value={it.closeAt} /></TableCell>
             <TableCell><Badge variant="outline">{typeLabel[it.type] ?? it.type}</Badge></TableCell>
             <TableCell><Badge variant="outline">{it.modality}</Badge></TableCell>
+            <TableCell>{it.showVacancies ? `${it.free}/${it.vacancies}` : "—"}</TableCell>
             <TableCell><PillsForItem s={it.status} /></TableCell>
             <TableCell className="text-right">
               <Link href={`/cursos/${it.id}`}>
