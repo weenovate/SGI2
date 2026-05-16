@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Save } from "lucide-react";
+import { Eye, EyeOff, Save } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
@@ -85,7 +85,7 @@ export function ConfigPanel() {
         {cats.map((c) => (
           <TabsContent key={c} value={c} className="space-y-4">
             <div className="space-y-3">
-              {grouped.get(c)!.map((s) => (
+              {visibleSettings(grouped.get(c)!, draft).map((s) => (
                 <SettingField key={s.key} setting={s} value={draft[s.key]} onChange={(v) => setField(s.key, v)} />
               ))}
             </div>
@@ -99,9 +99,49 @@ export function ConfigPanel() {
   );
 }
 
+// Orden lógico de los settings de "notificaciones" (los demás
+// settings se ordenan por la API por key alfabético).
+const NOTIF_ORDER = [
+  "notifications.enabled",
+  "notifications.types",
+  "notifications.client",
+  // SMTP
+  "notifications.smtp.host",
+  "notifications.smtp.port",
+  "notifications.smtp.user",
+  "notifications.smtp.password",
+  "notifications.smtp.security",
+  "notifications.smtp.requireAuth",
+  "notifications.smtp.from",
+  // Resend
+  "notifications.resend.apiKey",
+  "notifications.resend.from",
+];
+
+// Filtro de visibilidad por categoría. En "notificaciones" mostramos
+// solo los campos del provider seleccionado, además de los generales,
+// y respetamos el orden lógico definido arriba.
+function visibleSettings(items: Setting[], draft: Record<string, unknown>): Setting[] {
+  const client = (draft["notifications.client"] as string | undefined) ?? "";
+  const filtered = items.filter((s) => {
+    if (s.key.startsWith("notifications.smtp.")) return client === "smtp";
+    if (s.key.startsWith("notifications.resend.")) return client === "resend";
+    return true;
+  });
+  const isNotif = filtered.some((s) => s.key.startsWith("notifications."));
+  if (!isNotif) return filtered;
+  const idx = (k: string) => {
+    const i = NOTIF_ORDER.indexOf(k);
+    return i === -1 ? 999 : i;
+  };
+  return [...filtered].sort((a, b) => idx(a.key) - idx(b.key));
+}
+
 function SettingField({ setting, value, onChange }: { setting: Setting; value: unknown; onChange: (v: unknown) => void }) {
   const v = value as never;
   switch (setting.type) {
+    case "password":
+      return <PasswordSetting label={setting.label} value={(value as string) ?? ""} onChange={(s) => onChange(s)} />;
     case "boolean":
       return (
         <div className="flex items-center justify-between gap-3 py-1">
@@ -166,4 +206,30 @@ function SettingField({ setting, value, onChange }: { setting: Setting; value: u
         </div>
       );
   }
+}
+
+function PasswordSetting({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="space-y-1">
+      <Label>{label}</Label>
+      <div className="relative">
+        <Input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="pr-10"
+          autoComplete="new-password"
+        />
+        <button
+          type="button"
+          aria-label={show ? "Ocultar" : "Mostrar"}
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
 }

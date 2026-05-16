@@ -12,7 +12,7 @@ export default async function AlumnoLayout({ children }: { children: React.React
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <header className="border-b bg-white">
+      <header className="sticky top-0 z-40 border-b bg-white">
         <div className="container mx-auto h-16 flex items-center justify-between gap-4">
           <Link href="/mi-dashboard" className="flex items-center" aria-label="FuENN — inicio">
             <BrandLogo height={36} />

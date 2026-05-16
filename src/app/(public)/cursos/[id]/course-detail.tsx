@@ -11,6 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const typeLabel: Record<string, string> = {
+  completo: "Completo",
+  actualizacion: "Actualización",
+  completo_y_actualizacion: "Completo + Actualización",
+};
+
 export function CourseDetail({ id }: { id: string }) {
   const utils = api.useUtils();
   const q = api.instances.publicById.useQuery({ id });
@@ -51,7 +57,7 @@ export function CourseDetail({ id }: { id: string }) {
           {it.course.category && <Badge variant="secondary">{it.course.category}</Badge>}
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">{it.modality}</Badge>
-            <Badge variant="outline">{it.type.replace("_", " + ")}</Badge>
+            <Badge variant="outline">{typeLabel[it.type] ?? it.type}</Badge>
             {it.sinVacantes && <Badge variant="destructive">sin vacantes</Badge>}
             {!it.sinVacantes && it.free <= 3 && <Badge variant="warning">pocas vacantes</Badge>}
           </div>

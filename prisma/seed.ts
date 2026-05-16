@@ -322,7 +322,20 @@ async function seedSettings() {
       label: "Tipos de notificación habilitados",
       type: "multiselect",
     },
-    { key: "notifications.client", value: "resend", category: "notificaciones", label: "Tipo de cliente de email", type: "select", metadata: { options: ["smtp", "resend"] } },
+    { key: "notifications.client", value: "resend", category: "notificaciones", label: "Método de envío", type: "select", metadata: { options: ["smtp", "resend"] } },
+
+    // SMTP
+    { key: "notifications.smtp.host", value: "", category: "notificaciones", label: "Servidor SMTP", type: "string" },
+    { key: "notifications.smtp.port", value: 587, category: "notificaciones", label: "Puerto de salida", type: "integer" },
+    { key: "notifications.smtp.user", value: "", category: "notificaciones", label: "Usuario / correo de la cuenta SMTP", type: "string" },
+    { key: "notifications.smtp.password", value: "", category: "notificaciones", label: "Contraseña SMTP", type: "password" },
+    { key: "notifications.smtp.security", value: "starttls", category: "notificaciones", label: "Seguridad de conexión", type: "select", metadata: { options: ["none", "ssl", "starttls"] } },
+    { key: "notifications.smtp.requireAuth", value: true, category: "notificaciones", label: "Requiere autenticación", type: "boolean" },
+    { key: "notifications.smtp.from", value: "", category: "notificaciones", label: "Remitente (From)", type: "string" },
+
+    // Resend
+    { key: "notifications.resend.apiKey", value: "", category: "notificaciones", label: "API Key de Resend", type: "password" },
+    { key: "notifications.resend.from", value: "", category: "notificaciones", label: "Remitente (From)", type: "string" },
 
     // Ampliadas
     { key: "waitlist.offerWindowHours", value: 48, category: "inscripciones", label: "Validez de oferta de vacante (horas)", type: "integer" },

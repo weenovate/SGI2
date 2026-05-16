@@ -10,7 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useConfirm } from "@/components/confirm-dialog";
 import { cn } from "@/lib/utils";
+
+type DocFile = { id: string; mime: string; relPath: string; originalName: string; size: number };
 
 type UploadResult = {
   id: string;
@@ -40,7 +43,9 @@ export function MyDocs() {
   const create = api.documents.myCreate.useMutation({ onSuccess: () => utils.documents.myList.invalidate() });
   const replace = api.documents.myReplaceFiles.useMutation({ onSuccess: () => utils.documents.myList.invalidate() });
   const del = api.documents.myDelete.useMutation({ onSuccess: () => utils.documents.myList.invalidate() });
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [open, setOpen] = useState<{ replaceId?: string; replaceTipoId?: string } | null>(null);
+  const [preview, setPreview] = useState<DocFile | null>(null);
 
   return (
     <div className="space-y-4">
@@ -73,19 +78,44 @@ export function MyDocs() {
                 {d.expiringSoon && <Badge variant="info">Vence pronto</Badge>}
               </div>
               {d.rejectionNotes && <p className="text-xs text-destructive">Motivo: {d.rejectionNotes}</p>}
-              <div className="flex gap-1 flex-wrap">
-                {d.files.map((f) => (
-                  <a key={f.id} href={`/api/files/${f.fileObject.relPath}`} target="_blank" rel="noreferrer">
-                    <Badge variant="outline" className="cursor-pointer">{f.fileObject.originalName}</Badge>
-                  </a>
-                ))}
-              </div>
+              {d.files.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {d.files.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setPreview(f.fileObject)}
+                      title={f.fileObject.originalName}
+                      className="border rounded-md overflow-hidden bg-slate-50 hover:ring-2 hover:ring-primary/40 transition aspect-square flex items-center justify-center"
+                    >
+                      {f.fileObject.mime.startsWith("image/") ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/api/files/${f.fileObject.relPath}`}
+                          alt={f.fileObject.originalName}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : f.fileObject.mime === "application/pdf" ? (
+                        <FileText className="h-10 w-10 text-red-500" />
+                      ) : (
+                        <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={() => setOpen({ replaceId: d.id, replaceTipoId: d.tipoId })}>
                   <Upload className="h-4 w-4" /> Reemplazar
                 </Button>
                 <Button size="sm" variant="ghost" onClick={async () => {
-                  if (!confirm("¿Eliminar este documento?")) return;
+                  const ok = await confirm({
+                    title: "¿Eliminar este documento?",
+                    description: `Vas a eliminar "${d.tipo.label}". Esta acción no se puede deshacer; vas a tener que volver a subir el documento.`,
+                    variant: "destructive",
+                    confirmLabel: "Eliminar",
+                  });
+                  if (!ok) return;
                   try { await del.mutateAsync({ id: d.id }); toast.success("Documento eliminado"); }
                   catch (e) { toast.error("No se pudo eliminar", e instanceof Error ? e.message : undefined); }
                 }}>
@@ -112,7 +142,37 @@ export function MyDocs() {
           toast.success("Archivos reemplazados");
         }}
       />
+
+      <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
+      {confirmDialog}
     </div>
+  );
+}
+
+function FilePreviewDialog({ file, onClose }: { file: DocFile | null; onClose: () => void }) {
+  const url = file ? `/api/files/${file.relPath}` : "";
+  return (
+    <Dialog open={!!file} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{file?.originalName ?? "Archivo"}</DialogTitle>
+        </DialogHeader>
+        {file && (file.mime.startsWith("image/") ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt={file.originalName} className="w-full max-h-[70vh] object-contain bg-muted rounded-sm" />
+        ) : (
+          <iframe src={url} title={file.originalName} className="w-full h-[70vh] border rounded-sm" />
+        ))}
+        {file && (
+          <p className="text-xs text-muted-foreground">
+            {file.mime} · {Math.round(file.size / 1024)} KB
+          </p>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

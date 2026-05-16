@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useConfirm } from "@/components/confirm-dialog";
 
 const statusVariant: Record<string, "default" | "secondary" | "warning" | "success" | "destructive" | "info" | "outline"> = {
   preinscripto: "info",
@@ -34,6 +35,7 @@ export function MyEnrollments() {
   const utils = api.useUtils();
   const list = api.enrollments.myList.useQuery();
   const cancel = api.enrollments.cancel.useMutation({ onSuccess: () => utils.enrollments.myList.invalidate() });
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [payOpen, setPayOpen] = useState<string | null>(null);
@@ -108,7 +110,13 @@ export function MyEnrollments() {
                     )}
                     {(e.status === "preinscripto" || e.status === "validar_pago") && (
                       <Button size="sm" variant="ghost" onClick={async () => {
-                        if (!confirm("¿Cancelar inscripción?")) return;
+                        const ok = await confirm({
+                          title: "¿Cancelar inscripción?",
+                          description: `Vas a cancelar tu inscripción a ${e.instance.course.name} (${e.code}). Esta acción se puede revertir solo volviendo a inscribirte.`,
+                          variant: "destructive",
+                          confirmLabel: "Cancelar inscripción",
+                        });
+                        if (!ok) return;
                         try { await cancel.mutateAsync({ id: e.id }); toast.success("Inscripción cancelada"); }
                         catch (err) { toast.error("No se pudo cancelar", err instanceof Error ? err.message : undefined); }
                       }}>
@@ -130,6 +138,7 @@ export function MyEnrollments() {
           onDone={() => { setPayOpen(null); utils.enrollments.myList.invalidate(); }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }

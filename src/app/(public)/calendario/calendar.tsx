@@ -17,6 +17,12 @@ const months = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
+const typeLabel: Record<string, string> = {
+  completo: "Completo",
+  actualizacion: "Actualización",
+  completo_y_actualizacion: "Completo + Actualización",
+};
+
 export function Calendar() {
   const [view, setView] = useState<"cards" | "list">("cards");
   const [q, setQ] = useState("");
@@ -135,7 +141,7 @@ function CardsView({ items }: { items: Item[] }) {
             {it.course.category && <Badge variant="secondary">{it.course.category.label}</Badge>}
             <div className="flex items-center gap-2">
               <Badge variant="outline">{it.modality}</Badge>
-              <Badge variant="outline">{it.type.replace("_", " + ")}</Badge>
+              <Badge variant="outline">{typeLabel[it.type] ?? it.type}</Badge>
             </div>
             {it.teacher && <p className="text-muted-foreground">{it.teacher.name}</p>}
             <p>
@@ -179,7 +185,7 @@ function ListView({ items }: { items: Item[] }) {
             <TableCell>{it.course.category?.label ?? "—"}</TableCell>
             <TableCell>{new Date(it.startDate).toLocaleDateString("es-AR")}</TableCell>
             <TableCell>{new Date(it.endDate).toLocaleDateString("es-AR")}</TableCell>
-            <TableCell><Badge variant="outline">{it.type}</Badge></TableCell>
+            <TableCell><Badge variant="outline">{typeLabel[it.type] ?? it.type}</Badge></TableCell>
             <TableCell><Badge variant="outline">{it.modality}</Badge></TableCell>
             <TableCell><PillsForItem s={it.status} /></TableCell>
             <TableCell className="text-right">

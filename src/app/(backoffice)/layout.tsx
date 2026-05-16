@@ -51,26 +51,24 @@ export default async function BackofficeLayout({ children }: { children: React.R
       </aside>
       <div className="flex-1 flex flex-col">
         <header className="border-b bg-white">
-          <div className="h-14 flex items-center justify-between px-6">
+          <div className="h-14 flex items-center justify-end gap-3 px-6">
+            <NotificationsBell />
             <span className="text-sm text-muted-foreground">
               {session?.user?.name ?? "Sin sesión"}
               {session?.user?.role ? ` · ${session.user.role}` : ""}
             </span>
-            <div className="flex items-center gap-2">
-              <NotificationsBell />
-              {session?.user && (
-                <form
-                  action={async () => {
-                    "use server";
-                    await signOut({ redirectTo: "/login" });
-                  }}
-                >
-                  <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
-                    Salir
-                  </button>
-                </form>
-              )}
-            </div>
+            {session?.user && (
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/login" });
+                }}
+              >
+                <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
+                  Salir
+                </button>
+              </form>
+            )}
           </div>
         </header>
         <main className="flex-1 p-6">{children}</main>

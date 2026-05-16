@@ -338,6 +338,23 @@ y la suite vitest creció de 7 a **25 tests**. El code review encontró
 
 **Migración de DB requerida**: `npx prisma db push` en VPS para aplicar los nuevos campos. Luego correr `npm run db:seed:postal` una vez para cargar el dataset Correo Argentino y poblar `Localidad.postalCode`.
 
+### Iteración #4 — UX cleanup + Config de email
+
+6 ítems del cliente:
+
+| # | Tema | Cambio |
+| - | ---- | ------ |
+| 1 | Pill "completo + y_actualizacion" | `replace("_", " + ")` solo reemplazaba el primer underscore. Reemplazado por un map `typeLabel` en `calendar.tsx` y `course-detail.tsx`. |
+| 2 | Navbar sticky para alumno y público | `header` de `(alumno)/layout.tsx` y `(public)/layout.tsx` con `sticky top-0 z-40`. |
+| 3 | Mi Documentación: miniaturas + modal | Reemplazadas las badges-link por una grid de thumbnails. Imágenes muestran imagen real (`/api/files/...`), PDFs un ícono. Click → `FilePreviewDialog`. |
+| 4 | confirm() nativo | Nuevo componente `src/components/confirm-dialog.tsx` con `ConfirmDialog` + hook `useConfirm()` (devuelve un `confirm()` async + el JSX del dialog). Usado en `my-docs.tsx` (eliminar) y `my-enrollments.tsx` (cancelar). |
+| 5 | Backoffice: nombre arriba a la derecha | Header de `(backoffice)/layout.tsx` reordenado: campana, nombre+rol, botón Salir, todos a la derecha. |
+| 6 | Config SMTP / Resend con campos por método | Seed agrega 9 nuevas keys (`notifications.smtp.*` y `notifications.resend.*`), tipo `password` agregado a `SettingField` (con eye/eye-off), helper `visibleSettings()` que filtra los campos del provider activo y los reordena según `NOTIF_ORDER`. |
+
+**Notas operativas para esta iteración**:
+- Las nuevas claves de settings se cargan corriendo `npm run db:seed` (idempotente: usa `upsert` por `key`).
+- El tipo `password` se persiste como string plano en `Setting.value` (igual que el resto de los settings; el modelo no soporta cifrado de columnas). Para producción real conviene cargar la API key / contraseña SMTP por env var y dejar el campo del UI vacío. La UX del `eye/eye-off` evita exposición accidental.
+
 ---
 
 ## 8. Convenciones de código y UI
