@@ -56,77 +56,18 @@ export const enrollmentsRouter = router({
         readSetting<boolean>(ctx.db, "schedule.allowMultipleEditions", false),
       ]);
 
+      // Lecturas y validaciones que NO requieren lock (precheck rápido para
+      // dar feedback temprano al usuario sin abrir transacción innecesaria).
       const inst = await ctx.db.courseInstance.findFirstOrThrow({
         where: { id: input.instanceId, deletedAt: null },
         include: { course: true },
       });
-
-      // Cierre por hsAntesCierre
       const closeAt = new Date(inst.startDate.getTime() - inst.hoursBeforeClose * 3600_000);
       if (closeAt <= new Date()) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "La inscripción ya está cerrada." });
       }
 
-      // Limites globales
-      if (maxPerStudent > 0) {
-        const count = await ctx.db.enrollment.count({
-          where: { studentId: ctx.session.user.id, status: "preinscripto", deletedAt: null },
-        });
-        if (count >= maxPerStudent) {
-          throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Tenés ${count} preinscripciones (máx ${maxPerStudent}).` });
-        }
-      }
-
-      // Inscripciones a la misma instancia
-      const sameInstance = await ctx.db.enrollment.count({
-        where: { studentId: ctx.session.user.id, instanceId: input.instanceId, status: { notIn: ["rechazado", "cancelado"] }, deletedAt: null },
-      });
-      if (maxPerCourse > 0 && sameInstance >= maxPerCourse) {
-        throw new TRPCError({ code: "CONFLICT", message: "Ya estás inscripto a esta instancia." });
-      }
-
-      // Múltiples ediciones del mismo curso maestro
-      if (!allowMultipleEditions) {
-        const sameCourse = await ctx.db.enrollment.count({
-          where: {
-            studentId: ctx.session.user.id,
-            status: { notIn: ["rechazado", "cancelado"] },
-            deletedAt: null,
-            instance: { courseId: inst.courseId },
-          },
-        });
-        if (sameCourse > 0) {
-          throw new TRPCError({ code: "CONFLICT", message: "Ya estás inscripto a otra edición de este curso." });
-        }
-      }
-
-      // Vacantes
-      const taken = await ctx.db.enrollment.count({
-        where: { instanceId: inst.id, status: { in: ["preinscripto", "validar_pago", "inscripto"] }, deletedAt: null },
-      });
-      const free = inst.vacancies - taken;
-      if (free <= 0) {
-        // Si lista de espera activa → ofrecer endpoint de waitlist
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: inst.waitlistEnabled
-            ? "Sin vacantes — usá la opción de lista de espera."
-            : "Sin vacantes.",
-        });
-      }
-
-      // Empresa: si se sugiere una nueva, créala como pending_approval
-      let empresaId = input.empresaId ?? null;
-      let empresaSuggestion = input.empresaSuggestion ?? null;
-      if (input.payer === "empresa" && !empresaId && empresaSuggestion) {
-        const sug = await ctx.db.empresa.create({
-          data: { name: empresaSuggestion, status: "pending_approval", suggestedByUserId: ctx.session.user.id },
-        });
-        empresaId = sug.id;
-        empresaSuggestion = null;
-      }
-
-      // Requisitos de documentación
+      // Requisitos de documentación (lectura, no compite por escritura).
       const req = await computeRequirements({ userId: ctx.session.user.id, courseId: inst.courseId });
       let observed = false;
       if (!req.allOk) {
@@ -141,7 +82,70 @@ export const enrollmentsRouter = router({
 
       const profile = await ctx.db.studentProfile.findUniqueOrThrow({ where: { userId: ctx.session.user.id } });
 
+      // Empresa: si se sugiere una nueva, créala como pending_approval. Fuera
+      // de la transacción de la inscripción porque la empresa sugerida puede
+      // existir aunque la inscripción falle (la aprobación es independiente).
+      let empresaId = input.empresaId ?? null;
+      let empresaSuggestion = input.empresaSuggestion ?? null;
+      if (input.payer === "empresa" && !empresaId && empresaSuggestion) {
+        const sug = await ctx.db.empresa.create({
+          data: { name: empresaSuggestion, status: "pending_approval", suggestedByUserId: ctx.session.user.id },
+        });
+        empresaId = sug.id;
+        empresaSuggestion = null;
+      }
+
+      // Transacción crítica: lock pesimista sobre la fila de CourseInstance
+      // para serializar el conteo de vacantes y los chequeos de unicidad por
+      // alumno. Sin esto, dos enrolls simultáneos pueden overbookear.
       const result = await ctx.db.$transaction(async (tx) => {
+        // SELECT ... FOR UPDATE sobre la instancia bloquea otras tx que
+        // intenten enrolar al mismo curso hasta que esta commiteé.
+        await tx.$queryRaw`SELECT id FROM CourseInstance WHERE id = ${inst.id} FOR UPDATE`;
+
+        // Re-chequeos DENTRO de la sección crítica para evitar race conditions.
+        if (maxPerStudent > 0) {
+          const count = await tx.enrollment.count({
+            where: { studentId: ctx.session.user.id, status: "preinscripto", deletedAt: null },
+          });
+          if (count >= maxPerStudent) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Tenés ${count} preinscripciones (máx ${maxPerStudent}).` });
+          }
+        }
+
+        const sameInstance = await tx.enrollment.count({
+          where: { studentId: ctx.session.user.id, instanceId: input.instanceId, status: { notIn: ["rechazado", "cancelado"] }, deletedAt: null },
+        });
+        if (maxPerCourse > 0 && sameInstance >= maxPerCourse) {
+          throw new TRPCError({ code: "CONFLICT", message: "Ya estás inscripto a esta instancia." });
+        }
+
+        if (!allowMultipleEditions) {
+          const sameCourse = await tx.enrollment.count({
+            where: {
+              studentId: ctx.session.user.id,
+              status: { notIn: ["rechazado", "cancelado"] },
+              deletedAt: null,
+              instance: { courseId: inst.courseId },
+            },
+          });
+          if (sameCourse > 0) {
+            throw new TRPCError({ code: "CONFLICT", message: "Ya estás inscripto a otra edición de este curso." });
+          }
+        }
+
+        const taken = await tx.enrollment.count({
+          where: { instanceId: inst.id, status: { in: ["preinscripto", "validar_pago", "inscripto"] }, deletedAt: null },
+        });
+        if (inst.vacancies - taken <= 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: inst.waitlistEnabled
+              ? "Sin vacantes — usá la opción de lista de espera."
+              : "Sin vacantes.",
+          });
+        }
+
         const code = await generateEnrollmentCode(tx, inst.id);
         const enrollment = await tx.enrollment.create({
           data: {
@@ -158,13 +162,12 @@ export const enrollmentsRouter = router({
         // Snapshot inmutable de la doc vigente al inscribirse
         await snapshotEnrollmentDocs(tx, enrollment.id, profile.id, inst.courseId);
 
-        // Validacion automatica si esta activa y la doc esta OK
+        // Validación automática si está activa y la doc está OK
         if (autoValidate && req.allOk) {
-          if (input.payer === "empresa") {
-            await tx.enrollment.update({ where: { id: enrollment.id }, data: { status: "inscripto" } });
-          } else {
-            await tx.enrollment.update({ where: { id: enrollment.id }, data: { status: "validar_pago" } });
-          }
+          await tx.enrollment.update({
+            where: { id: enrollment.id },
+            data: { status: input.payer === "empresa" ? "inscripto" : "validar_pago" },
+          });
         }
 
         return enrollment;
