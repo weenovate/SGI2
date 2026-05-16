@@ -336,13 +336,31 @@ export const enrollmentsRouter = router({
 
   waitlistForInstance: adminOrBedel()
     .input(z.object({ instanceId: z.string() }))
-    .query(({ ctx, input }) =>
-      ctx.db.waitingListEntry.findMany({
+    .query(async ({ ctx, input }) => {
+      const entries = await ctx.db.waitingListEntry.findMany({
         where: { instanceId: input.instanceId, removedAt: null },
         include: { offers: true },
         orderBy: { position: "asc" },
-      }),
-    ),
+      });
+      // WaitingListEntry.studentId no tiene @relation, así que hacemos un
+      // join manual para mostrar nombre/email/dni en lugar del id crudo.
+      const studentIds = entries.map((e) => e.studentId);
+      const users = studentIds.length > 0
+        ? await ctx.db.user.findMany({
+            where: { id: { in: studentIds } },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              username: true,
+              studentProfile: { select: { docNumber: true } },
+            },
+          })
+        : [];
+      const usersById = new Map(users.map((u) => [u.id, u]));
+      return entries.map((e) => ({ ...e, student: usersById.get(e.studentId) ?? null }));
+    }),
 
   reorderWaitlist: adminOrBedel()
     .input(z.object({ instanceId: z.string(), order: z.array(z.string()) }))

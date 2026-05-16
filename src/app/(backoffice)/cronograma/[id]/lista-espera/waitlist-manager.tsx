@@ -35,21 +35,31 @@ export function WaitlistManager({ instanceId }: { instanceId: string }) {
         <TableHeader>
           <TableRow>
             <TableHead className="w-12">Pos</TableHead>
-            <TableHead>Alumno (id)</TableHead>
+            <TableHead>Alumno</TableHead>
+            <TableHead>Email</TableHead>
             <TableHead>Anotado</TableHead>
             <TableHead>Ofertas</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {list.isLoading && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-6">Cargando…</TableCell></TableRow>}
-          {!list.isLoading && (list.data?.length ?? 0) === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-6">Sin alumnos en espera.</TableCell></TableRow>}
+          {list.isLoading && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Cargando…</TableCell></TableRow>}
+          {!list.isLoading && (list.data?.length ?? 0) === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Sin alumnos en espera.</TableCell></TableRow>}
           {list.data?.map((e, idx) => {
             const pendingOffers = e.offers.filter((o) => o.status === "pending").length;
+            const studentLabel = e.student
+              ? `${e.student.lastName ?? ""}, ${e.student.firstName ?? ""}`.trim().replace(/^,\s*/, "")
+              : "—";
             return (
               <TableRow key={e.id}>
                 <TableCell className="font-mono">{e.position}</TableCell>
-                <TableCell className="font-mono text-xs">{e.studentId}</TableCell>
+                <TableCell>
+                  {studentLabel}
+                  {e.student?.studentProfile?.docNumber && (
+                    <div className="text-xs text-muted-foreground font-mono">DNI {e.student.studentProfile.docNumber}</div>
+                  )}
+                </TableCell>
+                <TableCell className="text-xs">{e.student?.email ?? "—"}</TableCell>
                 <TableCell>{new Date(e.createdAt).toLocaleString("es-AR")}</TableCell>
                 <TableCell>
                   {e.offers.length === 0 ? "—" :
