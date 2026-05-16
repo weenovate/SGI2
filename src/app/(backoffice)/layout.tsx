@@ -22,7 +22,7 @@ export default async function BackofficeLayout({ children }: { children: React.R
 
   return (
     <div className="min-h-dvh flex">
-      <aside className="w-60 border-r bg-slate-50 p-4 hidden md:block">
+      <aside className="w-60 border-r bg-card text-card-foreground p-4 hidden md:block">
         <Link href="/dashboard" className="flex items-center gap-2 mb-6" aria-label="FuENN">
           <BrandLogo height={32} />
         </Link>
@@ -52,7 +52,7 @@ export default async function BackofficeLayout({ children }: { children: React.R
         </nav>
       </aside>
       <div className="flex-1 flex flex-col">
-        <header className="border-b bg-white">
+        <header className="border-b bg-card text-card-foreground">
           <div className="h-14 flex items-center justify-end gap-3 px-6">
             <ThemeSwitcher />
             <NotificationsBell />
@@ -85,7 +85,7 @@ export default async function BackofficeLayout({ children }: { children: React.R
 
 function NavLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} className="block px-2 py-1.5 rounded hover:bg-slate-200">
+    <Link href={href} className="block px-2 py-1.5 rounded hover:bg-accent/15 hover:text-accent transition-colors">
       {label}
     </Link>
   );

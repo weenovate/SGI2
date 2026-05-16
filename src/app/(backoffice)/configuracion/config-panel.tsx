@@ -86,8 +86,22 @@ export function ConfigPanel() {
 
   async function saveCategory(cat: string) {
     const items = (grouped.get(cat) ?? []).map((s) => ({ key: s.key, value: draft[s.key] }));
+    const changedTheme = items.some(
+      (i) => i.key === "appearance.theme" && i.value !== (list.data as Setting[] | undefined)?.find((s) => s.key === "appearance.theme")?.value,
+    );
     await upsertMany.mutateAsync(items);
     toast.success("Cambios guardados");
+    // Si se cambió el tema global, recargamos para que el layout raíz
+    // re-resuelva el tema server-side. Si el usuario tiene una
+    // preferencia personal definida, esta seguirá ganando — se lo
+    // avisamos.
+    if (changedTheme) {
+      toast.info(
+        "Tema global actualizado",
+        "Si tu preferencia personal está activa, sigue teniendo prioridad. Usá la paleta del header para previsualizar.",
+      );
+      setTimeout(() => window.location.reload(), 800);
+    }
   }
 
   const cats = Array.from(grouped.keys()).sort((a, b) => (categoryLabels[a] ?? a).localeCompare(categoryLabels[b] ?? b));
@@ -96,7 +110,6 @@ export function ConfigPanel() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Configuración</h1>
-        <p className="text-sm text-muted-foreground">Opciones del sistema (HU + ampliadas).</p>
       </div>
       <Tabs defaultValue={cats[0] ?? "branding"}>
         <TabsList>

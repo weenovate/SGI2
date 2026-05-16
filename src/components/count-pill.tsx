@@ -16,7 +16,7 @@ export function CountPill({ total, filtered, loading }: { total?: number; filter
   if (total == null) return null;
   const isFiltered = filtered != null && filtered !== total;
   if (isFiltered) {
-    return <Badge variant="warning" title={`Mostrando ${filtered} de ${total}`}>{filtered} / {total}</Badge>;
+    return <Badge variant="warning" className="text-sm px-2.5" title={`Mostrando ${filtered} de ${total}`}>{filtered} / {total}</Badge>;
   }
-  return <Badge variant="secondary">{total}</Badge>;
+  return <Badge variant="default" className="text-sm px-2.5">{total}</Badge>;
 }

@@ -445,6 +445,11 @@ model CourseInstance {
   hoursBeforeClose Int             @default(0) // HU9-1
   waitlistEnabled  Boolean         @default(false)
   showVacancies    Boolean         @default(true)
+  // Cierre manual de inscripciones: si está en true, nadie puede
+  // anotarse (ni a la instancia ni a la lista de espera), aunque
+  // la fecha de cierre automático aún no haya llegado. Lo togglea
+  // admin/bedel desde el cronograma.
+  enrollmentClosed Boolean         @default(false)
 
   // Auditables específicos
   createdAt DateTime  @default(now())

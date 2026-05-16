@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Clock, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Clock, Lock, LockOpen, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { CountPill } from "@/components/count-pill";
-import { api } from "@/lib/trpc/react";
+import { api, type RouterOutputs } from "@/lib/trpc/react";
+import { toast } from "@/lib/toast";
+import { useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,12 +50,36 @@ const empty: Form = {
   showVacancies: true,
 };
 
+const modalityLabel: Record<Modality, string> = {
+  virtual: "Virtual",
+  presencial: "Presencial",
+  hibrido: "Híbrida",
+};
+const modalityBadge: Record<Modality, "info" | "success" | "warning"> = {
+  virtual: "info",
+  presencial: "success",
+  hibrido: "warning",
+};
+
+const typeLabel: Record<CourseType, string> = {
+  completo: "Completo",
+  actualizacion: "Actualización",
+  completo_y_actualizacion: "Completo + Actualización",
+};
+// `default` (primary), `info` (cyan), `warning` (amber). Tres colores distintos.
+const typeBadge: Record<CourseType, "default" | "info" | "warning"> = {
+  completo: "default",
+  actualizacion: "info",
+  completo_y_actualizacion: "warning",
+};
+
 export function CronogramaView({ canRestore }: { canRestore: boolean }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [error, setError] = useState<string | null>(null);
+  const [seeEnrollmentsFor, setSeeEnrollmentsFor] = useState<{ id: string; label: string } | null>(null);
 
   const utils = api.useUtils();
   const courses = api.courses.list.useQuery({ pageSize: 200 });
@@ -66,6 +92,10 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
   const update = api.instances.update.useMutation({ onSuccess: () => { utils.instances.list.invalidate(); setOpen(false); setForm(empty); } });
   const del = api.instances.softDelete.useMutation({ onSuccess: () => utils.instances.list.invalidate() });
   const restore = api.instances.restore.useMutation({ onSuccess: () => utils.instances.list.invalidate() });
+  const setOpenClosed = api.instances.setEnrollmentOpen.useMutation({
+    onSuccess: () => utils.instances.list.invalidate(),
+  });
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     if (editingId && byId.data) {
@@ -120,6 +150,25 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
     }
   }
 
+  async function toggleOpenClosed(id: string, currentClosed: boolean, label: string) {
+    const closing = !currentClosed;
+    const ok = await confirm({
+      title: closing ? "Cerrar inscripciones" : "Reabrir inscripciones",
+      description: closing
+        ? `Vas a cerrar las inscripciones de ${label}. Nadie más va a poder anotarse hasta que la reabras.`
+        : `Vas a reabrir las inscripciones de ${label}.`,
+      confirmLabel: closing ? "Cerrar inscripciones" : "Reabrir",
+      variant: closing ? "destructive" : "default",
+    });
+    if (!ok) return;
+    try {
+      await setOpenClosed.mutateAsync({ id, closed: closing });
+      toast.success(closing ? "Inscripciones cerradas" : "Inscripciones reabiertas");
+    } catch (e) {
+      toast.error("No se pudo actualizar", e instanceof Error ? e.message : undefined);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -142,48 +191,44 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Sigla + Edición</TableHead>
-            <TableHead>Curso</TableHead>
+            <TableHead className="min-w-[260px]">Instancia</TableHead>
             <TableHead>Modalidad</TableHead>
+            <TableHead>Tipo</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead>Cierre</TableHead>
             <TableHead>Inicio</TableHead>
             <TableHead>Fin</TableHead>
-            <TableHead>Docente</TableHead>
-            <TableHead>Vac/Insc</TableHead>
-            <TableHead>L.E.</TableHead>
+            <TableHead className="min-w-[180px]">Insc./Vac.</TableHead>
+            <TableHead>Waitlist</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {list.isLoading && <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>}
-          {list.data?.items.map((it) => {
-            const deleted = !!it.deletedAt;
-            return (
-              <TableRow key={it.id} className={deleted ? "deleted-row" : undefined}>
-                <TableCell className="font-mono">{it.course.abbr} {it.edition}</TableCell>
-                <TableCell>{it.course.name}</TableCell>
-                <TableCell><Badge variant="secondary">{it.modality}</Badge></TableCell>
-                <TableCell>{it.startDate.toLocaleDateString("es-AR")}</TableCell>
-                <TableCell>{it.endDate.toLocaleDateString("es-AR")}</TableCell>
-                <TableCell>{it.teacher ? `${it.teacher.user.lastName}, ${it.teacher.user.firstName}` : "—"}</TableCell>
-                <TableCell>{it.vacancies}/{it._count.enrollments}</TableCell>
-                <TableCell>{it.waitlistEnabled ? <Badge variant="info">Activa ({it._count.waitlistEntries})</Badge> : <Badge variant="outline">—</Badge>}</TableCell>
-                <TableCell className="text-right">
-                  {!deleted && (
-                    <>
-                      {it.waitlistEnabled && (
-                        <Link href={`/cronograma/${it.id}/lista-espera`}>
-                          <Button variant="ghost" size="icon" title="Lista de espera"><Clock className="h-4 w-4" /></Button>
-                        </Link>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => { setEditingId(it.id); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("¿Eliminar instancia?")) del.mutate({ id: it.id }); }}><Trash2 className="h-4 w-4" /></Button>
-                    </>
-                  )}
-                  {deleted && canRestore && <Button variant="outline" size="sm" onClick={() => restore.mutate({ id: it.id })}>Restaurar</Button>}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {list.isLoading && <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>}
+          {list.data?.items.map((it) => (
+            <CronogramaRow
+              key={it.id}
+              it={it}
+              deleted={!!it.deletedAt}
+              canRestore={canRestore}
+              onEdit={() => { setEditingId(it.id); setOpen(true); }}
+              onDelete={async () => {
+                const ok = await confirm({
+                  title: "¿Eliminar instancia?",
+                  description: `Vas a eliminar ${it.course.abbr} ${it.edition} — ${it.course.name}. Es soft-delete: se puede restaurar.`,
+                  variant: "destructive",
+                  confirmLabel: "Eliminar",
+                });
+                if (!ok) return;
+                try { await del.mutateAsync({ id: it.id }); toast.success("Instancia eliminada"); }
+                catch (e) { toast.error("No se pudo eliminar", e instanceof Error ? e.message : undefined); }
+              }}
+              onRestore={() => restore.mutate({ id: it.id })}
+              onSeeEnrollments={() => setSeeEnrollmentsFor({ id: it.id, label: `${it.course.abbr} ${it.edition} — ${it.course.name}` })}
+              onToggleOpen={() => toggleOpenClosed(it.id, it.enrollmentClosed, `${it.course.abbr} ${it.edition}`)}
+              toggleBusy={setOpenClosed.isPending}
+            />
+          ))}
         </TableBody>
       </Table>
 
@@ -267,6 +312,205 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EnrollmentsForInstanceDialog
+        target={seeEnrollmentsFor}
+        onClose={() => setSeeEnrollmentsFor(null)}
+      />
+      {confirmDialog}
     </div>
+  );
+}
+
+type Row = RouterOutputs["instances"]["list"]["items"][number];
+
+function CronogramaRow({
+  it,
+  deleted,
+  canRestore,
+  onEdit,
+  onDelete,
+  onRestore,
+  onSeeEnrollments,
+  onToggleOpen,
+  toggleBusy,
+}: {
+  it: Row;
+  deleted: boolean;
+  canRestore: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRestore: () => void;
+  onSeeEnrollments: () => void;
+  onToggleOpen: () => void;
+  toggleBusy: boolean;
+}) {
+  const taken = it._count.enrollments;
+  const total = it.vacancies;
+  const pct = total === 0 ? 100 : Math.min(100, Math.round((taken / total) * 100));
+  const free = Math.max(0, total - taken);
+
+  const closeAt = new Date(it.startDate.getTime() - it.hoursBeforeClose * 3600_000);
+  const hoursToClose = (closeAt.getTime() - Date.now()) / 3_600_000;
+  const enrollmentState: "cerrada" | "cierra_pronto" | "abierta" =
+    it.enrollmentClosed || hoursToClose <= 0
+      ? "cerrada"
+      : hoursToClose <= 48
+        ? "cierra_pronto"
+        : "abierta";
+
+  return (
+    <TableRow className={deleted ? "deleted-row" : undefined}>
+      <TableCell>
+        <div className="font-medium">
+          <span className="font-mono">{it.course.abbr} {it.edition}</span>
+          <span className="text-muted-foreground"> | </span>
+          {it.course.name}
+        </div>
+        <div className="text-xs text-muted-foreground mt-0.5">
+          {it.teacher ? `${it.teacher.user.firstName ?? ""} ${it.teacher.user.lastName ?? ""}`.trim() : "Sin docente"}
+        </div>
+      </TableCell>
+      <TableCell><Badge variant={modalityBadge[it.modality as Modality]}>{modalityLabel[it.modality as Modality]}</Badge></TableCell>
+      <TableCell><Badge variant={typeBadge[it.type as CourseType]}>{typeLabel[it.type as CourseType]}</Badge></TableCell>
+      <TableCell>
+        {enrollmentState === "abierta" && <Badge variant="success">Abierta</Badge>}
+        {enrollmentState === "cierra_pronto" && <Badge variant="warning">Cierra pronto</Badge>}
+        {enrollmentState === "cerrada" && <Badge variant="destructive">Cerrada</Badge>}
+      </TableCell>
+      <TableCell className="text-sm whitespace-nowrap">{closeAt.toLocaleDateString("es-AR")}</TableCell>
+      <TableCell className="text-sm whitespace-nowrap">{it.startDate.toLocaleDateString("es-AR")}</TableCell>
+      <TableCell className="text-sm whitespace-nowrap">{it.endDate.toLocaleDateString("es-AR")}</TableCell>
+      <TableCell>
+        <CapacityBar taken={taken} total={total} pct={pct} free={free} />
+      </TableCell>
+      <TableCell>
+        {it.waitlistEnabled
+          ? <Badge variant="info">Activa ({it._count.waitlistEntries})</Badge>
+          : <Badge variant="outline">—</Badge>}
+      </TableCell>
+      <TableCell className="text-right whitespace-nowrap">
+        {!deleted && (
+          <>
+            <Button variant="ghost" size="icon" onClick={onSeeEnrollments} title="Ver inscripciones">
+              <Users className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleOpen}
+              disabled={toggleBusy}
+              title={it.enrollmentClosed ? "Reabrir inscripciones" : "Cerrar inscripciones"}
+            >
+              {it.enrollmentClosed ? <LockOpen className="h-4 w-4 text-success" /> : <Lock className="h-4 w-4" />}
+            </Button>
+            {it.waitlistEnabled && (
+              <Link href={`/cronograma/${it.id}/lista-espera`}>
+                <Button variant="ghost" size="icon" title="Lista de espera"><Clock className="h-4 w-4" /></Button>
+              </Link>
+            )}
+            <Button variant="ghost" size="icon" onClick={onEdit} title="Editar"><Pencil className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={onDelete} title="Eliminar"><Trash2 className="h-4 w-4" /></Button>
+          </>
+        )}
+        {deleted && canRestore && <Button variant="outline" size="sm" onClick={onRestore}>Restaurar</Button>}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ProgressBar de capacidad con 3 zonas (verde/naranja/rojo) según %.
+function CapacityBar({ taken, total, pct, free }: { taken: number; total: number; pct: number; free: number }) {
+  const color =
+    pct < 70 ? "bg-success" :
+    pct < 100 ? "bg-warning" :
+    "bg-destructive";
+  return (
+    <div className="space-y-1" title={`${pct}% completo — ${free} vacante${free === 1 ? "" : "s"} disponible${free === 1 ? "" : "s"}`}>
+      <div className="flex justify-between text-xs font-mono tabular-nums">
+        <span>{taken}/{total}</span>
+        <span className="text-muted-foreground">{pct}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className={`h-full ${color} transition-all`} style={{ width: `${Math.max(2, pct)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+const enrollmentStatusLabel: Record<string, string> = {
+  preinscripto: "Preinscripto",
+  validar_pago: "Validar pago",
+  inscripto: "Inscripto",
+  rechazado: "Rechazado",
+  cancelado: "Cancelado",
+  lista_espera: "Lista de espera",
+};
+const enrollmentStatusBadge: Record<string, "info" | "warning" | "success" | "destructive" | "secondary"> = {
+  preinscripto: "info",
+  validar_pago: "warning",
+  inscripto: "success",
+  rechazado: "destructive",
+  cancelado: "secondary",
+  lista_espera: "secondary",
+};
+
+function EnrollmentsForInstanceDialog({
+  target,
+  onClose,
+}: {
+  target: { id: string; label: string } | null;
+  onClose: () => void;
+}) {
+  const q = api.instances.enrollmentsForInstance.useQuery(
+    { instanceId: target?.id ?? "" },
+    { enabled: !!target },
+  );
+  const items = useMemo(() => q.data ?? [], [q.data]);
+
+  return (
+    <Dialog open={!!target} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Inscripciones — {target?.label}</DialogTitle>
+          <DialogDescription>
+            {items.length} {items.length === 1 ? "inscripción" : "inscripciones"}.
+          </DialogDescription>
+        </DialogHeader>
+        {q.isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
+        {!q.isLoading && items.length === 0 && <p className="text-sm text-muted-foreground">Sin inscripciones todavía.</p>}
+        {items.length > 0 && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Alumno</TableHead>
+                <TableHead>DNI</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Estado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell className="font-mono text-xs">{e.code}</TableCell>
+                  <TableCell>{e.student.firstName} {e.student.lastName}</TableCell>
+                  <TableCell className="font-mono text-xs">{e.student.studentProfile?.docNumber ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{e.student.email}</TableCell>
+                  <TableCell>
+                    <Badge variant={enrollmentStatusBadge[e.status] ?? "secondary"}>
+                      {enrollmentStatusLabel[e.status] ?? e.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -46,7 +46,13 @@ export function CourseDetail({ id }: { id: string }) {
   const closeAt = new Date(it.closeAt);
   const closeHoursLeft = (closeAt.getTime() - Date.now()) / 3_600_000;
   const closeUrgent = closeHoursLeft <= 48;
-  const showWaitlistButton = it.sinVacantes;
+  // Estado efectivo de inscripción al curso:
+  // - closed: el admin cerró manualmente, o pasó la fecha de cierre.
+  // - waitlistMode: cupo lleno pero waitlist activa → muestra "Lista de espera".
+  // - canEnroll: enroll directo.
+  const closed = it.enrollmentClosed || closeHoursLeft <= 0;
+  const waitlistMode = !closed && it.waitlistEnabled && it.sinVacantes;
+  const canEnroll = !closed && !it.sinVacantes;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -60,8 +66,10 @@ export function CourseDetail({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">{it.modality}</Badge>
             <Badge variant="outline">{typeLabel[it.type] ?? it.type}</Badge>
-            {it.sinVacantes && <Badge variant="destructive">sin vacantes</Badge>}
-            {!it.sinVacantes && it.free <= 3 && <Badge variant="warning">pocas vacantes</Badge>}
+            {closed && <Badge variant="destructive">inscripciones cerradas</Badge>}
+            {!closed && it.sinVacantes && <Badge variant="destructive">sin vacantes</Badge>}
+            {!closed && !it.sinVacantes && it.free <= 3 && <Badge variant="warning">pocas vacantes</Badge>}
+            {!closed && waitlistMode && <Badge variant="info">lista de espera disponible</Badge>}
           </div>
           {it.teacher && <p><strong>Docente:</strong> {it.teacher.name}</p>}
           <p>
@@ -117,24 +125,25 @@ export function CourseDetail({ id }: { id: string }) {
       </Card>
 
       <div className="flex justify-end gap-2">
-        {showWaitlistButton && (
+        {waitlistMode ? (
           <Button
-            variant="outline"
+            disabled={(!reqs.data?.allOk && !allowMissingDocs) || enterWaitlist.isPending}
             onClick={async () => {
               try { await enterWaitlist.mutateAsync({ instanceId: it.id }); toast.success("Te anotamos en la lista de espera"); }
               catch (e) { toast.error("No se pudo anotar en la lista", e instanceof Error ? e.message : undefined); }
             }}
-            disabled={enterWaitlist.isPending}
           >
-            Entrar a lista de espera
+            {enterWaitlist.isPending ? "Anotando…" : "Lista de espera"}
+          </Button>
+        ) : (
+          <Button
+            disabled={!canEnroll || (!reqs.data?.allOk && !allowMissingDocs)}
+            onClick={() => { setOpen(true); setError(null); setDone(null); }}
+            title={closed ? "Las inscripciones están cerradas para este curso" : undefined}
+          >
+            {closed ? "Inscripciones cerradas" : "Inscribirme"}
           </Button>
         )}
-        <Button
-          disabled={(!reqs.data?.allOk && !allowMissingDocs) || it.sinVacantes}
-          onClick={() => { setOpen(true); setError(null); setDone(null); }}
-        >
-          Inscribirme
-        </Button>
       </div>
 
       {!reqs.data?.allOk && allowMissingDocs && (

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, roleProcedure, publicProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
+import { userPublicSelect } from "../selects";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 
@@ -146,6 +147,43 @@ export const instancesRouter = router({
       return updated;
     }),
 
+  // Toggle manual de apertura/cierre de inscripciones. Es
+  // independiente del cierre automático por `hoursBeforeClose`.
+  setEnrollmentOpen: adminOrBedel()
+    .input(z.object({ id: z.string(), closed: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const before = await ctx.db.courseInstance.findUnique({ where: { id: input.id } });
+      if (!before) throw new TRPCError({ code: "NOT_FOUND" });
+      const updated = await ctx.db.courseInstance.update({
+        where: { id: input.id },
+        data: { enrollmentClosed: input.closed },
+      });
+      await audit({
+        userId: ctx.session.user.id,
+        ip: ctx.ip,
+        action: "update",
+        entity: "CourseInstance",
+        entityId: input.id,
+        before: { enrollmentClosed: before.enrollmentClosed },
+        after: { enrollmentClosed: updated.enrollmentClosed },
+      });
+      return updated;
+    }),
+
+  // Listado de inscripciones para una instancia particular.
+  // Usado por el botón "Ver inscripciones" del cronograma.
+  enrollmentsForInstance: adminOrBedel()
+    .input(z.object({ instanceId: z.string() }))
+    .query(({ ctx, input }) =>
+      ctx.db.enrollment.findMany({
+        where: { instanceId: input.instanceId, deletedAt: null },
+        include: {
+          student: { select: { ...userPublicSelect, studentProfile: { select: { docNumber: true } } } },
+        },
+        orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+      }),
+    ),
+
   softDelete: adminOrBedel()
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -277,6 +315,8 @@ export const instancesRouter = router({
             vacancies: it.vacancies,
             free,
             closeAt,
+            enrollmentClosed: it.enrollmentClosed,
+            waitlistEnabled: it.waitlistEnabled,
             course: {
               id: it.course.id,
               abbr: it.course.abbr,
@@ -382,6 +422,8 @@ export const instancesRouter = router({
         free,
         showVacancies: showVacanciesGlobal && inst.showVacancies,
         sinVacantes: free === 0,
+        enrollmentClosed: inst.enrollmentClosed,
+        waitlistEnabled: inst.waitlistEnabled,
         course: {
           id: inst.course.id,
           abbr: inst.course.abbr,

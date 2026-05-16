@@ -103,6 +103,12 @@ export const enrollmentsRouter = router({
         // intenten enrolar al mismo curso hasta que esta commiteé.
         await tx.$queryRaw`SELECT id FROM CourseInstance WHERE id = ${inst.id} FOR UPDATE`;
 
+        // Cierre manual de inscripciones (toggleado por admin/bedel).
+        const fresh = await tx.courseInstance.findUniqueOrThrow({ where: { id: inst.id } });
+        if (fresh.enrollmentClosed) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inscripciones cerradas para esta instancia." });
+        }
+
         // Re-chequeos DENTRO de la sección crítica para evitar race conditions.
         if (maxPerStudent > 0) {
           const count = await tx.enrollment.count({
@@ -209,6 +215,15 @@ export const enrollmentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const inst = await ctx.db.courseInstance.findFirstOrThrow({ where: { id: input.instanceId, deletedAt: null } });
       if (!inst.waitlistEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Lista de espera no habilitada." });
+      if (inst.enrollmentClosed) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inscripciones cerradas para esta instancia." });
+
+      // La lista de espera solo se habilita cuando el cupo está completo.
+      const taken = await ctx.db.enrollment.count({
+        where: { instanceId: inst.id, status: { in: ["preinscripto", "validar_pago", "inscripto"] }, deletedAt: null },
+      });
+      if (inst.vacancies - taken > 0) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Aún hay vacantes — inscribite directamente en lugar de unirte a la lista de espera." });
+      }
 
       const exists = await ctx.db.waitingListEntry.findUnique({
         where: { instanceId_studentId: { instanceId: inst.id, studentId: ctx.session.user.id } },
