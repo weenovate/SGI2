@@ -80,6 +80,7 @@ export const coursesRouter = router({
         objectives: z.string().optional(),
         workload: z.number().int().positive().nullable().optional(),
         program: z.string().optional(),
+        stcwRule: z.string().max(160).nullable().optional(),
         requisiteTipoIds: z.array(z.string()).default([]),
       }),
     )
@@ -92,6 +93,7 @@ export const coursesRouter = router({
           objectives: input.objectives ?? null,
           workload: input.workload ?? null,
           program: input.program ?? null,
+          stcwRule: input.stcwRule ?? null,
           createdBy: ctx.session.user.id,
           requisites: {
             create: input.requisiteTipoIds.map((tipoDocumentacionId) => ({ tipoDocumentacionId })),
@@ -119,6 +121,7 @@ export const coursesRouter = router({
         objectives: z.string().optional(),
         workload: z.number().int().positive().nullable().optional(),
         program: z.string().optional(),
+        stcwRule: z.string().max(160).nullable().optional(),
         requisiteTipoIds: z.array(z.string()).default([]),
         propagateToInstances: z.boolean().default(false),
       }),
@@ -137,6 +140,7 @@ export const coursesRouter = router({
             objectives: input.objectives ?? null,
             workload: input.workload ?? null,
             program: input.program ?? null,
+            stcwRule: input.stcwRule ?? null,
           },
         });
         // Reemplazar requisitos

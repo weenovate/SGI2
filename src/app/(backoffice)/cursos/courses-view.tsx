@@ -21,12 +21,13 @@ type FormState = {
   objectives: string;
   workload: string;
   program: string;
+  stcwRule: string;
   requisiteTipoIds: string[];
   propagateToInstances: boolean;
 };
 
 const empty: FormState = {
-  abbr: "", name: "", categoryId: null, objectives: "", workload: "", program: "",
+  abbr: "", name: "", categoryId: null, objectives: "", workload: "", program: "", stcwRule: "",
   requisiteTipoIds: [], propagateToInstances: false,
 };
 
@@ -70,6 +71,7 @@ export function CoursesView({ canRestore }: { canRestore: boolean }) {
         objectives: byId.data.objectives ?? "",
         workload: byId.data.workload?.toString() ?? "",
         program: byId.data.program ?? "",
+        stcwRule: byId.data.stcwRule ?? "",
         requisiteTipoIds: byId.data.requisites.map((r) => r.tipoDocumentacionId),
         propagateToInstances: false,
       });
@@ -85,6 +87,7 @@ export function CoursesView({ canRestore }: { canRestore: boolean }) {
       objectives: form.objectives || undefined,
       workload: form.workload ? Number(form.workload) : null,
       program: form.program || undefined,
+      stcwRule: form.stcwRule || null,
       requisiteTipoIds: form.requisiteTipoIds,
     };
     try {
@@ -180,6 +183,15 @@ export function CoursesView({ canRestore }: { canRestore: boolean }) {
             <div className="col-span-2">
               <Label>Nombre</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="col-span-2">
+              <Label>Regla STCW (optativo)</Label>
+              <Input
+                value={form.stcwRule}
+                maxLength={160}
+                placeholder="Ej.: A-VI/1, A-VI/2-1, …"
+                onChange={(e) => setForm({ ...form, stcwRule: e.target.value })}
+              />
             </div>
             <div className="col-span-2">
               <Label>Categoría</Label>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Lock, LockOpen, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Clock, FileSpreadsheet, Lock, LockOpen, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { CountPill } from "@/components/count-pill";
 import { api, type RouterOutputs } from "@/lib/trpc/react";
 import { toast } from "@/lib/toast";
@@ -191,9 +191,7 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="min-w-[260px]">Instancia</TableHead>
-            <TableHead>Modalidad</TableHead>
-            <TableHead>Tipo</TableHead>
+            <TableHead className="min-w-[300px]">Instancia</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Cierre</TableHead>
             <TableHead>Inicio</TableHead>
@@ -204,7 +202,7 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {list.isLoading && <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>}
+          {list.isLoading && <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>}
           {list.data?.items.map((it) => (
             <CronogramaRow
               key={it.id}
@@ -352,12 +350,18 @@ function CronogramaRow({
 
   const closeAt = new Date(it.startDate.getTime() - it.hoursBeforeClose * 3600_000);
   const hoursToClose = (closeAt.getTime() - Date.now()) / 3_600_000;
-  const enrollmentState: "cerrada" | "cierra_pronto" | "abierta" =
-    it.enrollmentClosed || hoursToClose <= 0
-      ? "cerrada"
-      : hoursToClose <= 48
-        ? "cierra_pronto"
-        : "abierta";
+  // Estado real: una instancia está "cerrada" SOLO cuando el admin la
+  // cerró manualmente o cuando se agotaron las vacantes. Que la fecha
+  // de cierre haya pasado no es por sí mismo un estado: el sistema
+  // sigue mostrando "Abierta" hasta que ocurra alguna de las dos.
+  // "Cierra pronto" es informativo y solo aplica cuando la instancia
+  // está abierta y el cierre está dentro de las próximas 48hs.
+  const isFull = total > 0 && free === 0;
+  const isClosed = it.enrollmentClosed || isFull;
+  const isOpen = !isClosed;
+  const isClosingSoon = isOpen && hoursToClose > 0 && hoursToClose <= 48;
+  const teacherName = it.teacher ? `${it.teacher.user.firstName ?? ""} ${it.teacher.user.lastName ?? ""}`.trim() : "";
+  const araHref = `/api/cronograma/${it.id}/ara.xlsx`;
 
   return (
     <TableRow className={deleted ? "deleted-row" : undefined}>
@@ -367,16 +371,22 @@ function CronogramaRow({
           <span className="text-muted-foreground"> | </span>
           {it.course.name}
         </div>
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {it.teacher ? `${it.teacher.user.firstName ?? ""} ${it.teacher.user.lastName ?? ""}`.trim() : "Sin docente"}
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          <span className="text-xs text-muted-foreground">{teacherName || "Sin docente"}</span>
+          <Badge variant={modalityBadge[it.modality as Modality]} className="text-[10px] py-0 px-1.5">
+            {modalityLabel[it.modality as Modality]}
+          </Badge>
+          <Badge variant={typeBadge[it.type as CourseType]} className="text-[10px] py-0 px-1.5">
+            {typeLabel[it.type as CourseType]}
+          </Badge>
         </div>
       </TableCell>
-      <TableCell><Badge variant={modalityBadge[it.modality as Modality]}>{modalityLabel[it.modality as Modality]}</Badge></TableCell>
-      <TableCell><Badge variant={typeBadge[it.type as CourseType]}>{typeLabel[it.type as CourseType]}</Badge></TableCell>
       <TableCell>
-        {enrollmentState === "abierta" && <Badge variant="success">Abierta</Badge>}
-        {enrollmentState === "cierra_pronto" && <Badge variant="warning">Cierra pronto</Badge>}
-        {enrollmentState === "cerrada" && <Badge variant="destructive">Cerrada</Badge>}
+        {isClosed
+          ? <Badge variant="destructive">Cerrada</Badge>
+          : isClosingSoon
+            ? <Badge variant="warning">Cierra pronto</Badge>
+            : <Badge variant="success">Abierta</Badge>}
       </TableCell>
       <TableCell className="text-sm whitespace-nowrap">{closeAt.toLocaleDateString("es-AR")}</TableCell>
       <TableCell className="text-sm whitespace-nowrap">{it.startDate.toLocaleDateString("es-AR")}</TableCell>
@@ -392,6 +402,11 @@ function CronogramaRow({
       <TableCell className="text-right whitespace-nowrap">
         {!deleted && (
           <>
+            <a href={araHref} download>
+              <Button variant="ghost" size="icon" title="Descargar planilla ARA (Excel)">
+                <FileSpreadsheet className="h-4 w-4" />
+              </Button>
+            </a>
             <Button variant="ghost" size="icon" onClick={onSeeEnrollments} title="Ver inscripciones">
               <Users className="h-4 w-4" />
             </Button>

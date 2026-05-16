@@ -406,6 +406,10 @@ model Course {
   workload   Int? // horas
   program    String?         @db.Text
   imageUrl   String?
+  // Regla STCW (Standards of Training, Certification and Watchkeeping
+  // for Seafarers). Optativo; lo completan los cursos náuticos
+  // certificantes. Aparece en la planilla ARA exportable.
+  stcwRule   String?
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
   deletedAt  DateTime?
