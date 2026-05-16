@@ -1,7 +1,8 @@
 # Handoff técnico — SGI / FuENN
 
 > Documento para retomar el trabajo en otra sesión sin perder contexto.
-> Última actualización: junto con commit `44e66d2` sobre `main`.
+> Última actualización: junto con commit `016cb4c` sobre `main`
+> (testing exhaustivo + 3 fixes de seguridad, race condition y UX).
 
 ---
 
@@ -176,11 +177,18 @@ src/
 │   └── trpc/
 │       ├── root.ts            # composición de todos los routers
 │       ├── trpc.ts            # context, procedures, roleProcedure
+│       ├── selects.ts         # userPublicSelect (sin passwordHash) reutilizable
 │       └── routers/           # ver lista abajo
 └── middleware.ts              # multi-host
 
 tests/
 └── e2e/smoke.spec.ts          # Playwright
+
+# Unit tests (sin DB, vitest):
+src/server/services/payment-ocr.test.ts
+src/server/services/payment-ocr-edge.test.ts
+src/server/services/document-ocr.test.ts
+src/server/services/enrollment-code.test.ts
 
 vitest.config.ts + vitest.setup.ts   # unit tests
 playwright.config.ts
@@ -288,6 +296,32 @@ Idempotente.
 **Pendiente del cliente**: el "ítem 9" no existía en la lista (saltó
 del 8 al 10). Si pide algo, agregarlo.
 
+### Iteración #2.bis — Testing exhaustivo + fixes detectados por review
+
+Después de pedir "tests exhaustivos", se cubrieron typecheck/build/lint
+y la suite vitest creció de 7 a **25 tests**. El code review encontró
+3 bugs reales que se arreglaron y commitearon a `main`:
+
+| # | Commit | Severidad | Bug y fix |
+| - | ------ | --------- | --------- |
+| 1 | `5925e85` | 🔴 Seguridad | Los `findMany`/`findUnique` de User en `users`, `students`, `teachers`, `enrollments`, `documents`, `classes` retornaban `passwordHash` + `failedAttempts` + `lockedUntil` al cliente. Fix: nuevo `src/server/trpc/selects.ts` con `userPublicSelect` aplicado en todos los endpoints expuestos. Las queries internas (verificación de password en `changePassword`/`requestEmailChange`) NO se tocan porque necesitan el hash para `bcrypt.compare`. |
+| 2 | `c4851ab` | 🟡 Integridad | `enrollments.enroll` contaba vacantes y límites **fuera** de la transacción. Dos enrolls simultáneos podían overbookear. Fix: la tx abre con `SELECT ... FOR UPDATE` sobre `CourseInstance` (lock pesimista por fila → otros enroll a la misma instancia esperan al COMMIT). Todos los recuentos (`taken`, `sameInstance`, `sameCourse`, `maxPerStudent`) ahora corren dentro de la sección crítica. |
+| 3 | `016cb4c` | 🟠 UX | `/cronograma/[id]/lista-espera` mostraba el cuid del alumno (`studentId`) en lugar del nombre. Fix: `waitlistForInstance` hace join manual contra `User` (la relación Prisma no estaba modelada, evita migración) y la UI muestra "Apellido, Nombre · DNI · email". |
+
+#### Bugs menores detectados pero NO arreglados (decisión consciente)
+
+- **`confirm()` nativo en 8 lugares** (empresas, mis-cursos, usuarios,
+  alumnos, cronograma, cursos, mis-inscripciones, mi-documentacion).
+  Funciona; reemplazar con `AlertDialog` es cosmético y toca muchos
+  archivos. Iteración aparte.
+- **Mutations sin `onError` en backoffice** (`reset.mutate`,
+  `approve.mutate`, `reject.mutate`, etc.): silent failures, el error
+  va a consola pero no al usuario. Sería bueno cablearlos a `toast.error`.
+- **`acceptOffer` sin lock pesimista**: cada offer se acepta una sola
+  vez por diseño, riesgo marginal.
+- **OCR slow start de Tesseract**: documentado en sección 13. Requiere
+  warmup post-deploy.
+
 ---
 
 ## 8. Convenciones de código y UI
@@ -315,6 +349,18 @@ del 8 al 10). Si pide algo, agregarlo.
 - **Catalog readonly**: los `list:` de catálogos son `publicProcedure`
   (helper `readCatalog`). Los `create/update/softDelete/restore`
   son `adminOrBedel()` o `adminOnly()`.
+- **Exposición de User**: cuando un endpoint retorne User al cliente,
+  usar `select: userPublicSelect` (de `src/server/trpc/selects.ts`)
+  para excluir `passwordHash`, `failedAttempts` y `lockedUntil`. Si
+  hay un nested include `include: { user: true }`, cambiar a
+  `include: { user: { select: userPublicSelect } }`. Solo se permite
+  leer el hash en queries internas que después comparen con bcrypt
+  (changePassword, requestEmailChange, authorize).
+- **Mutations con conteo + create**: si la lógica depende de un
+  conteo (vacantes, límites, unicidad), envolver TODO en una
+  transacción que abra con `tx.$queryRaw\`SELECT id FROM Tabla WHERE id = ${id} FOR UPDATE\`;`
+  para evitar race conditions. Ver `enrollments.enroll` como
+  referencia.
 
 ---
 
@@ -424,10 +470,23 @@ en cuanto deployes):
 npm run test
 ```
 
-Stubs de `server-only` y env mínimo en `vitest.setup.ts`. Cubre:
-- `payment-ocr` (4 casos): Mercado Pago, transferencia US, sin datos,
-  fecha inválida.
-- `document-ocr` (3 casos): `extractExpiryDate`.
+**25 tests** sin requerir DB. Stubs de `server-only` y env mínimo en
+`vitest.setup.ts`. Archivos:
+
+- `src/server/services/payment-ocr.test.ts` (4 casos básicos)
+- `src/server/services/payment-ocr-edge.test.ts` (14 casos: variantes
+  MP/Depósito/Rapipago, formatos AR vs US, "Referencia:", años de 2
+  dígitos, falsos positivos, scores comparativos)
+- `src/server/services/document-ocr.test.ts` (3 casos sobre
+  `extractExpiryDate`: fecha más alta, separadores -./, sin match)
+- `src/server/services/enrollment-code.test.ts` (4 casos sobre
+  `generateEnrollmentCode`: formato `I-LCI5626-018`, padding,
+  abbr largo, count=999)
+
+Cuando agregues servicios puros (sin DB), agregales su `.test.ts`
+hermano. Si el servicio depende de Prisma, podés mockear el cliente
+o usar un schema SQLite para integración (requiere ajustes en
+`schema.prisma`).
 
 ### E2E (playwright)
 
@@ -465,26 +524,62 @@ health endpoint.
    muestra UserMenu, así que funciona pero un admin verá header
    "público" en esa pantalla. Aceptable para MVP.
 6. **Vitest tiene warnings de CJS** de Vite — solo cosmético.
+7. **`confirm()` nativo** sigue usándose en 8 lugares (empresas,
+   mis-cursos, usuarios, alumnos, cronograma, cursos, mis-inscripciones,
+   mi-documentacion). Funciona pero bloquea el hilo y no respeta el
+   theme. Reemplazo por `AlertDialog` está pendiente.
+8. **Mutations en backoffice sin `onError`**: varias `mutate(...)`
+   directas (approve/reject/reset.mutate) no muestran toast al
+   usuario en caso de error — solo log a consola. Falta cablear
+   `toast.error` en su `onError`.
+9. **`acceptOffer` (lista de espera) sin lock pesimista**: a
+   diferencia de `enroll()`, no usa `SELECT ... FOR UPDATE` sobre
+   la instancia. El riesgo es marginal porque cada offer solo se
+   acepta una vez (status pending→accepted), pero si quisieras
+   blindarlo, aplicar el mismo patrón que `enroll`.
 
 ---
 
 ## 14. Próximos pasos sugeridos / pendientes
 
-Bugs / mejoras que el cliente puede pedir:
+Por prioridad estimada:
 
-- **Aplicar pill X/Y a /catalogos**: el grupo de catálogos usa
-  `CatalogEditor` genérico — agregarle prop `total/filtered`.
+**UX / quick wins**
+- **Reemplazar `confirm()` por AlertDialog** en los 8 lugares listados
+  en sección 13. Mismo patrón que ya usamos con Dialog para forms.
+- **Cablear `toast.error` en `onError`** de las mutations backoffice
+  (`approve.mutate`, `reject.mutate`, `reset.mutate`, etc.).
+- **Aplicar pill X/Y a `/catalogos`**: el `CatalogEditor` genérico
+  necesita prop `total/filtered`.
+
+**Funcional**
 - **Notificaciones más ricas**: agrupar por tipo, paginación, link al
   recurso relacionado (inscripción/documento/pago).
-- **Rate limit en `/api/upload`** (mencionado en
-  `docs/security-checklist.md` como pendiente).
+- **`enrollments.closeWindow`**: pasar de métrica a enviar
+  recordatorio al alumno N horas antes del cierre.
+
+**Seguridad / hardening**
+- **Rate limit en `/api/upload`** (en `docs/security-checklist.md`
+  pendiente).
 - **Habilitar 2FA opcional** para roles backoffice.
-- **Internacionalización**: hoy todo es es-AR hardcodeado.
-- **Reverse proxy headers** verificar `X-Forwarded-*` con Apache para
-  que `headers().get("host")` devuelva el host real, no localhost.
+- **`acceptOffer` con lock pesimista** (paralelo a `enroll`).
+- **Auditar otros endpoints que devuelvan User**: estuvo todo
+  cubierto con `userPublicSelect`, pero si se agregan endpoints
+  nuevos hay que recordar usar ese select.
+
+**Operacional**
+- **Reverse proxy headers**: verificar que Apache pasa `X-Forwarded-*`
+  para que `headers().get("host")` devuelva el host real en
+  `after-login` y otros server components que dependen.
 - **Borrar rama remota `claude/analyze-specs-plan-sprints-DNPnb`**: el
-  agente no tiene permisos vía git push (HTTP 403). Hacerlo desde
-  GitHub UI.
+  agente no tiene permisos vía `git push --delete` (HTTP 403).
+  Hacerlo desde GitHub UI.
+- **Warmup OCR post-deploy** (Tesseract): pegar un POST a `/api/upload`
+  con un archivo demo para cargar el modelo en memoria antes del primer
+  alumno.
+
+**Otros**
+- **Internacionalización**: hoy todo es es-AR hardcodeado.
 
 ---
 
