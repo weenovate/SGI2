@@ -350,14 +350,13 @@ function CronogramaRow({
 
   const closeAt = new Date(it.startDate.getTime() - it.hoursBeforeClose * 3600_000);
   const hoursToClose = (closeAt.getTime() - Date.now()) / 3_600_000;
-  // Estado real: una instancia está "cerrada" SOLO cuando el admin la
-  // cerró manualmente o cuando se agotaron las vacantes. Que la fecha
-  // de cierre haya pasado no es por sí mismo un estado: el sistema
-  // sigue mostrando "Abierta" hasta que ocurra alguna de las dos.
-  // "Cierra pronto" es informativo y solo aplica cuando la instancia
+  // Estado real: cerrada cuando (a) el admin la cerró manualmente,
+  // (b) se agotaron las vacantes o (c) la fecha de cierre ya pasó.
+  // "Cierra pronto" es solo un label informativo cuando la instancia
   // está abierta y el cierre está dentro de las próximas 48hs.
   const isFull = total > 0 && free === 0;
-  const isClosed = it.enrollmentClosed || isFull;
+  const closeAtPassed = hoursToClose <= 0;
+  const isClosed = it.enrollmentClosed || isFull || closeAtPassed;
   const isOpen = !isClosed;
   const isClosingSoon = isOpen && hoursToClose > 0 && hoursToClose <= 48;
   const teacherName = it.teacher ? `${it.teacher.user.firstName ?? ""} ${it.teacher.user.lastName ?? ""}`.trim() : "";
@@ -402,11 +401,22 @@ function CronogramaRow({
       <TableCell className="text-right whitespace-nowrap">
         {!deleted && (
           <>
-            <a href={araHref} download>
-              <Button variant="ghost" size="icon" title="Descargar planilla ARA (Excel)">
+            {isClosed ? (
+              <a href={araHref} download>
+                <Button variant="ghost" size="icon" title="Descargar planilla ARA (Excel)">
+                  <FileSpreadsheet className="h-4 w-4" />
+                </Button>
+              </a>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled
+                title="Solo disponible cuando la instancia está cerrada"
+              >
                 <FileSpreadsheet className="h-4 w-4" />
               </Button>
-            </a>
+            )}
             <Button variant="ghost" size="icon" onClick={onSeeEnrollments} title="Ver inscripciones">
               <Users className="h-4 w-4" />
             </Button>

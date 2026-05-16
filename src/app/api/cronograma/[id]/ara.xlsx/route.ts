@@ -43,6 +43,18 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   });
   if (!inst) return new NextResponse("Not found", { status: 404 });
 
+  // Misma lógica de cierre que el UI: manual, cupo lleno o fecha
+  // pasada. La planilla ARA solo se entrega cuando la instancia
+  // efectivamente cerró sus inscripciones.
+  const taken = inst.enrollments.length;
+  const isFull = inst.vacancies > 0 && taken >= inst.vacancies;
+  const closeAt = new Date(inst.startDate.getTime() - inst.hoursBeforeClose * 3600_000);
+  const closeAtPassed = closeAt.getTime() <= Date.now();
+  const isClosed = inst.enrollmentClosed || isFull || closeAtPassed;
+  if (!isClosed) {
+    return new NextResponse("La planilla solo está disponible cuando la instancia está cerrada.", { status: 409 });
+  }
+
   // Map docTypeId → label, en un solo SELECT
   const docTypeIds = Array.from(
     new Set(
@@ -88,9 +100,20 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   // Filas de alumnos: B11..M44 (máximo 34 alumnos). Si hay más, los
   // dejamos afuera del documento y devolvemos un warning en header.
+  //
+  // La plantilla original trae datos mockup (fórmulas de auto-numerado
+  // en B, fórmulas tipo "DNI" en C, "ARG" en F, espacios en L/M, etc.).
+  // Esos no son parte del template "real" — los limpiamos antes de
+  // rellenar para evitar valores fantasma en filas sin alumno.
   const MAX_ROWS = 34;
   const truncated = inst.enrollments.length > MAX_ROWS;
   const rows = inst.enrollments.slice(0, MAX_ROWS);
+  const studentCols = ["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"];
+  for (let row = 11; row <= 44; row++) {
+    for (const col of studentCols) {
+      ws.getCell(`${col}${row}`).value = null;
+    }
+  }
   for (let i = 0; i < rows.length; i++) {
     const e = rows[i]!;
     const row = 11 + i;
@@ -98,7 +121,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     ws.getCell(`B${row}`).value = i + 1;
     ws.getCell(`C${row}`).value = sp?.docTypeId ? docTypeLabel.get(sp.docTypeId) ?? "" : "";
     ws.getCell(`D${row}`).value = sp?.docNumber ?? "";
-    ws.getCell(`E${row}`).value = sp?.birthDate ?? "";
+    ws.getCell(`E${row}`).value = sp?.birthDate ?? null;
     ws.getCell(`F${row}`).value = sp?.nationality ?? "";
     ws.getCell(`G${row}`).value = e.student.lastName ?? "";
     ws.getCell(`H${row}`).value = e.student.firstName ?? "";
