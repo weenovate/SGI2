@@ -5,6 +5,7 @@ import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
 import { sendEmail, renderBaseTemplate } from "@/lib/email";
 import { env } from "@/lib/env";
+import { userPublicSelect } from "../selects";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyDocente = () => roleProcedure("docente");
@@ -27,7 +28,7 @@ export const teachersRouter = router({
   me: onlyDocente().query(async ({ ctx }) => {
     return ctx.db.teacherProfile.findUnique({
       where: { userId: ctx.session.user.id },
-      include: { user: true },
+      include: { user: { select: userPublicSelect } },
     });
   }),
 
@@ -82,7 +83,7 @@ export const teachersRouter = router({
           deletedAt: null,
         },
         include: {
-          student: { include: { studentProfile: true } },
+          student: { select: { ...userPublicSelect, studentProfile: true } },
           grade: true,
         },
         orderBy: { student: { lastName: "asc" } },
@@ -107,7 +108,7 @@ export const teachersRouter = router({
             input?.includeDeleted ? {} : { user: { deletedAt: null } },
           ],
         },
-        include: { user: true },
+        include: { user: { select: userPublicSelect } },
         orderBy: { user: { lastName: "asc" } },
       }),
     ),
@@ -115,7 +116,7 @@ export const teachersRouter = router({
   byId: adminOrBedel()
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) =>
-      ctx.db.teacherProfile.findUnique({ where: { id: input.id }, include: { user: true } }),
+      ctx.db.teacherProfile.findUnique({ where: { id: input.id }, include: { user: { select: userPublicSelect } } }),
     ),
 
   create: adminOrBedel()
@@ -221,7 +222,7 @@ export const teachersRouter = router({
             titulacionId: input.titulacionId ?? null,
             birthDate: input.birthDate ?? null,
           },
-          include: { user: true },
+          include: { user: { select: userPublicSelect } },
         });
       });
 

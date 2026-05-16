@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { sendEmail, renderBaseTemplate } from "@/lib/email";
 import { env } from "@/lib/env";
 import { issueToken, consumeToken } from "@/lib/tokens";
+import { userPublicSelect } from "../selects";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -33,7 +34,7 @@ export const studentsRouter = router({
   me: onlyAlumno().query(async ({ ctx }) => {
     const user = await ctx.db.user.findUniqueOrThrow({
       where: { id: ctx.session.user.id },
-      include: { studentProfile: true },
+      select: { ...userPublicSelect, studentProfile: true },
     });
     return user;
   }),
@@ -148,7 +149,7 @@ export const studentsRouter = router({
               }
             : {}),
         },
-        include: { studentProfile: true },
+        select: { ...userPublicSelect, studentProfile: true },
         orderBy: { lastName: "asc" },
       }),
     ),

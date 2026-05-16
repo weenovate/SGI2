@@ -5,6 +5,7 @@ import { audit } from "@/lib/audit";
 import { deleteFile, readBuffer } from "@/lib/storage";
 import { analyzeDocumentBuffer } from "@/server/services/document-ocr";
 import { notifyDocumentDecision } from "@/server/services/notifications";
+import { userPublicSelect } from "../selects";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -218,7 +219,7 @@ export const documentsRouter = router({
           where,
           include: {
             tipo: true,
-            student: { include: { user: true } },
+            student: { include: { user: { select: userPublicSelect } } },
             files: { include: { fileObject: true } },
           },
           orderBy: { uploadedAt: "desc" },

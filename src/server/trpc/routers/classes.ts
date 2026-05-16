@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
+import { userPublicSelect } from "../selects";
 
 const teacherOrAdminBedel = () => roleProcedure("docente", "admin", "bedel");
 
@@ -102,7 +103,7 @@ export const classesRouter = router({
       const sessions = await ctx.db.classSession.findMany({ where: { instanceId: input.instanceId } });
       const enrollments = await ctx.db.enrollment.findMany({
         where: { instanceId: input.instanceId, deletedAt: null, status: "inscripto" },
-        include: { student: true },
+        include: { student: { select: userPublicSelect } },
       });
       const totalSessions = sessions.length;
       const attendances = await ctx.db.attendance.findMany({

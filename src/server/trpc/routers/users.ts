@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { router, roleProcedure } from "../trpc";
 import { audit } from "@/lib/audit";
+import { userPublicSelect } from "../selects";
 
 const adminOnly = () => roleProcedure("admin");
 
@@ -38,6 +39,7 @@ export const usersRouter = router({
           ],
         },
         orderBy: [{ role: "asc" }, { lastName: "asc" }],
+        select: userPublicSelect,
       }),
     ),
 

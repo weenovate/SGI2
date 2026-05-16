@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { computeRequirements, snapshotEnrollmentDocs } from "@/server/services/requirements";
 import { generateEnrollmentCode } from "@/server/services/enrollment-code";
 import { notifyEnrollmentCreated, notifyEnrollmentStatusChanged } from "@/server/services/notifications";
+import { userPublicSelect } from "../selects";
 
 const adminOrBedel = () => roleProcedure("admin", "bedel");
 const onlyAlumno = () => roleProcedure("alumno");
@@ -23,7 +24,7 @@ export const enrollmentsRouter = router({
     ctx.db.enrollment.findMany({
       where: { studentId: ctx.session.user.id, deletedAt: null },
       include: {
-        instance: { include: { course: true, teacher: { include: { user: true } } } },
+        instance: { include: { course: true, teacher: { include: { user: { select: userPublicSelect } } } } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -272,7 +273,7 @@ export const enrollmentsRouter = router({
           where,
           include: {
             instance: { include: { course: true } },
-            student: { include: { studentProfile: true } },
+            student: { select: { ...userPublicSelect, studentProfile: true } },
           },
           orderBy: { createdAt: "desc" },
           skip: ((input?.page ?? 1) - 1) * (input?.pageSize ?? 50),
@@ -289,8 +290,8 @@ export const enrollmentsRouter = router({
       ctx.db.enrollment.findUnique({
         where: { id: input.id },
         include: {
-          instance: { include: { course: true, teacher: { include: { user: true } } } },
-          student: { include: { studentProfile: true } },
+          instance: { include: { course: true, teacher: { include: { user: { select: userPublicSelect } } } } },
+          student: { select: { ...userPublicSelect, studentProfile: true } },
           snapshots: true,
           payments: true,
         },
