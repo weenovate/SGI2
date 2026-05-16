@@ -355,6 +355,17 @@ y la suite vitest creció de 7 a **25 tests**. El code review encontró
 - Las nuevas claves de settings se cargan corriendo `npm run db:seed` (idempotente: usa `upsert` por `key`).
 - El tipo `password` se persiste como string plano en `Setting.value` (igual que el resto de los settings; el modelo no soporta cifrado de columnas). Para producción real conviene cargar la API key / contraseña SMTP por env var y dejar el campo del UI vacío. La UX del `eye/eye-off` evita exposición accidental.
 
+### Iteración #5 — Calendario (cierre + pill X/Y), login limpio, versionado
+
+4 ítems:
+
+| # | Tema | Cambio |
+| - | ---- | ------ |
+| 1 | "Cierre inscripciones" en cards y lista del calendario | `closeAt` ya venía del server (calculado `startDate - hoursBeforeClose`). Nuevo componente `CloseDate` que pinta la fecha en rojo cuando faltan ≤48 horas. |
+| 2 | Pill X/Y al lado del título del calendario | Nuevo endpoint `instances.publicCalendarCounts` que devuelve `{ filtered, total }` con un `count()` paralelo (sin `take`/cursor). UI: badge con color `info` cuando hay filtros activos (q, mes, onlyAvailable) y `secondary` cuando no. Para `onlyAvailable` (filtro client-side) el conteo filtrado se recalcula sobre los items ya cargados. |
+| 3 | Login sin navbar | Movido `(public)/login/` → `(auth)/login/`. Nuevo `(auth)/layout.tsx` con solo `<main>` + footer (sin header). |
+| 4 | Versionado X.Y.Z en footer | Nuevo `src/lib/version.ts` con `APP_VERSION`. Sincronizado con `package.json#version`. Aplicado en footers de (auth), (public), (alumno) y (backoffice). Versión inicial: `1.1.0` (1.0.0 = MVP estable; este commit suma intermedias). |
+
 ---
 
 ## 8. Convenciones de código y UI

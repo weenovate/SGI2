@@ -293,6 +293,56 @@ export const instancesRouter = router({
       return { items: enriched, nextCursor };
     }),
 
+  // Conteos para la pill X/Y del calendario público.
+  // - `filtered`: cuenta con los filtros aplicados (mismo where que
+  //   `publicCalendar`, sin paginar y sin el filtro client-side
+  //   `onlyAvailable` que se aplica sobre datos enriquecidos).
+  // - `total`: cuenta total sin filtros (solo el piso temporal:
+  //   instancias no eliminadas con `endDate >= now`).
+  publicCalendarCounts: publicProcedure
+    .input(
+      z
+        .object({
+          q: z.string().optional(),
+          monthYear: z
+            .object({ month: z.number().int().min(1).max(12), year: z.number().int() })
+            .optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      const fromDate = input?.monthYear
+        ? new Date(Date.UTC(input.monthYear.year, input.monthYear.month - 1, 1))
+        : now;
+      const toDate = input?.monthYear
+        ? new Date(Date.UTC(input.monthYear.year, input.monthYear.month, 1))
+        : undefined;
+
+      const filteredWhere = {
+        deletedAt: null,
+        endDate: { gte: now },
+        startDate: toDate ? { gte: fromDate, lt: toDate } : { gte: fromDate },
+        ...(input?.q
+          ? {
+              course: {
+                OR: [
+                  { name: { contains: input.q } },
+                  { abbr: { contains: input.q } },
+                  { category: { label: { contains: input.q } } },
+                ],
+              },
+            }
+          : {}),
+      };
+      const totalWhere = { deletedAt: null, endDate: { gte: now } };
+      const [filtered, total] = await Promise.all([
+        ctx.db.courseInstance.count({ where: filteredWhere }),
+        ctx.db.courseInstance.count({ where: totalWhere }),
+      ]);
+      return { filtered, total };
+    }),
+
   publicById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {

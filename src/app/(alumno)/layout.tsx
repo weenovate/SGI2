@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { UserMenu } from "@/components/user-menu";
+import { APP_VERSION } from "@/lib/version";
 
 export default async function AlumnoLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -32,6 +33,9 @@ export default async function AlumnoLayout({ children }: { children: React.React
         </div>
       </header>
       <main className="flex-1 container mx-auto py-6">{children}</main>
+      <footer className="border-t py-4 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} FuENN — Sistema de Gestión de Inscripciones · v{APP_VERSION}
+      </footer>
     </div>
   );
 }

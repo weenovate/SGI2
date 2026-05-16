@@ -39,25 +39,43 @@ export function Calendar() {
     return opts;
   }, []);
 
+  const monthValue = monthYear !== "_" ? monthOptions.find((o) => o.key === monthYear)?.value : undefined;
   const list = api.instances.publicCalendar.useInfiniteQuery(
     {
       q: q || undefined,
       onlyAvailable,
-      monthYear: monthYear !== "_" ? monthOptions.find((o) => o.key === monthYear)?.value : undefined,
+      monthYear: monthValue,
       take: 12,
     },
     {
       getNextPageParam: (last) => last.nextCursor ?? undefined,
     },
   );
+  const counts = api.instances.publicCalendarCounts.useQuery({
+    q: q || undefined,
+    monthYear: monthValue,
+  });
 
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+  // Activamos modo filtrado si hay query, mes elegido o el toggle de
+  // disponibilidad. `onlyAvailable` se aplica client-side sobre los
+  // datos enriquecidos, así que el ajuste de la pill X/Y se hace acá.
+  const hasFilters = !!q || monthYear !== "_" || onlyAvailable;
+  const filteredCount = onlyAvailable
+    ? items.filter((it) => !it.status.sinVacantes).length
+    : counts.data?.filtered ?? items.length;
+  const totalCount = counts.data?.total ?? items.length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Calendario de cursos</h1>
+          <h1 className="text-3xl font-semibold flex items-center gap-3">
+            Calendario de cursos
+            <Badge variant={hasFilters ? "info" : "secondary"} className="text-sm font-normal">
+              {hasFilters ? `${filteredCount}/${totalCount}` : totalCount}
+            </Badge>
+          </h1>
           <p className="text-muted-foreground">Filtrá y elegí el curso que querés tomar.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -114,6 +132,20 @@ export function Calendar() {
 
 type Item = RouterOutputs["instances"]["publicCalendar"]["items"][number];
 
+// Muestra la fecha de cierre de inscripciones. Cambia a rojo cuando
+// faltan menos de 48 horas (sigue activo) y queda en rojo apagado si
+// el cierre ya pasó.
+function CloseDate({ value }: { value: Date | string }) {
+  const d = new Date(value);
+  const hours = (d.getTime() - Date.now()) / 3_600_000;
+  const isUrgent = hours <= 48;
+  return (
+    <span className={isUrgent ? "text-destructive font-medium" : undefined}>
+      {d.toLocaleDateString("es-AR")}
+    </span>
+  );
+}
+
 function PillsForItem({ s }: { s: Item["status"] }) {
   return (
     <div className="flex flex-wrap gap-1">
@@ -146,7 +178,8 @@ function CardsView({ items }: { items: Item[] }) {
             {it.teacher && <p className="text-muted-foreground">{it.teacher.name}</p>}
             <p>
               <strong>Inicio:</strong> {new Date(it.startDate).toLocaleDateString("es-AR")}<br />
-              <strong>Fin:</strong> {new Date(it.endDate).toLocaleDateString("es-AR")}
+              <strong>Fin:</strong> {new Date(it.endDate).toLocaleDateString("es-AR")}<br />
+              <strong>Cierre inscripciones:</strong> <CloseDate value={it.closeAt} />
             </p>
             <PillsForItem s={it.status} />
           </CardContent>
@@ -171,6 +204,7 @@ function ListView({ items }: { items: Item[] }) {
           <TableHead>Categoría</TableHead>
           <TableHead>Inicio</TableHead>
           <TableHead>Fin</TableHead>
+          <TableHead>Cierre inscripciones</TableHead>
           <TableHead>Tipo</TableHead>
           <TableHead>Modalidad</TableHead>
           <TableHead>Estado</TableHead>
@@ -185,6 +219,7 @@ function ListView({ items }: { items: Item[] }) {
             <TableCell>{it.course.category?.label ?? "—"}</TableCell>
             <TableCell>{new Date(it.startDate).toLocaleDateString("es-AR")}</TableCell>
             <TableCell>{new Date(it.endDate).toLocaleDateString("es-AR")}</TableCell>
+            <TableCell><CloseDate value={it.closeAt} /></TableCell>
             <TableCell><Badge variant="outline">{typeLabel[it.type] ?? it.type}</Badge></TableCell>
             <TableCell><Badge variant="outline">{it.modality}</Badge></TableCell>
             <TableCell><PillsForItem s={it.status} /></TableCell>

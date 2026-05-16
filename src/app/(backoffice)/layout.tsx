@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { APP_VERSION } from "@/lib/version";
 
 export default async function BackofficeLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -72,6 +73,9 @@ export default async function BackofficeLayout({ children }: { children: React.R
           </div>
         </header>
         <main className="flex-1 p-6">{children}</main>
+        <footer className="border-t py-3 px-6 text-right text-xs text-muted-foreground">
+          v{APP_VERSION}
+        </footer>
       </div>
     </div>
   );
