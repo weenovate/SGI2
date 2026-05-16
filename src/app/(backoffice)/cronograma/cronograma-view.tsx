@@ -363,7 +363,16 @@ function CronogramaRow({
   const araHref = `/api/cronograma/${it.id}/ara.xlsx`;
 
   return (
-    <TableRow className={deleted ? "deleted-row" : undefined}>
+    <TableRow
+      className={
+        deleted
+          ? "deleted-row"
+          // Hover destacado: tinte de accent + border-left de 3px del
+          // color de acento, para que el usuario vea claramente sobre
+          // qué fila van a actuar los botones de acción.
+          : "hover:bg-accent/10 hover:shadow-[inset_3px_0_0_hsl(var(--accent))] transition-colors"
+      }
+    >
       <TableCell>
         <div className="font-medium">
           <span className="font-mono">{it.course.abbr} {it.edition}</span>

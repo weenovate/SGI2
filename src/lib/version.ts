@@ -5,4 +5,4 @@
 //
 // Mantener sincronizado con la versión de `package.json`. El footer
 // de todas las vistas (logueado o no, backoffice y alumno) lee esto.
-export const APP_VERSION = "1.4.1";
+export const APP_VERSION = "1.4.2";
