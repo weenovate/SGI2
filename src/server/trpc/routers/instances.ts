@@ -147,16 +147,27 @@ export const instancesRouter = router({
       return updated;
     }),
 
-  // Toggle manual de apertura/cierre de inscripciones. Es
-  // independiente del cierre automático por `hoursBeforeClose`.
+  // Toggle manual de apertura/cierre de inscripciones.
+  //
+  // - closed=true:  cierre manual. `enrollmentClosed=true` y reseteo
+  //   `enrollmentForceOpen=false` (un cierre cancela un override
+  //   previo de reapertura).
+  // - closed=false: reapertura forzada. `enrollmentClosed=false` y
+  //   `enrollmentForceOpen=true`. El override hace que el sistema
+  //   NO vuelva a cerrar la instancia automáticamente aunque se haya
+  //   agotado el cupo o pasado la fecha de cierre. Persiste hasta
+  //   que el admin la cierre manualmente otra vez.
   setEnrollmentOpen: adminOrBedel()
     .input(z.object({ id: z.string(), closed: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       const before = await ctx.db.courseInstance.findUnique({ where: { id: input.id } });
       if (!before) throw new TRPCError({ code: "NOT_FOUND" });
+      const data = input.closed
+        ? { enrollmentClosed: true, enrollmentForceOpen: false }
+        : { enrollmentClosed: false, enrollmentForceOpen: true };
       const updated = await ctx.db.courseInstance.update({
         where: { id: input.id },
-        data: { enrollmentClosed: input.closed },
+        data,
       });
       await audit({
         userId: ctx.session.user.id,
@@ -164,8 +175,8 @@ export const instancesRouter = router({
         action: "update",
         entity: "CourseInstance",
         entityId: input.id,
-        before: { enrollmentClosed: before.enrollmentClosed },
-        after: { enrollmentClosed: updated.enrollmentClosed },
+        before: { enrollmentClosed: before.enrollmentClosed, enrollmentForceOpen: before.enrollmentForceOpen },
+        after: { enrollmentClosed: updated.enrollmentClosed, enrollmentForceOpen: updated.enrollmentForceOpen },
       });
       return updated;
     }),
@@ -316,6 +327,7 @@ export const instancesRouter = router({
             free,
             closeAt,
             enrollmentClosed: it.enrollmentClosed,
+            enrollmentForceOpen: it.enrollmentForceOpen,
             waitlistEnabled: it.waitlistEnabled,
             course: {
               id: it.course.id,
@@ -423,6 +435,7 @@ export const instancesRouter = router({
         showVacancies: showVacanciesGlobal && inst.showVacancies,
         sinVacantes: free === 0,
         enrollmentClosed: inst.enrollmentClosed,
+        enrollmentForceOpen: inst.enrollmentForceOpen,
         waitlistEnabled: inst.waitlistEnabled,
         course: {
           id: inst.course.id,

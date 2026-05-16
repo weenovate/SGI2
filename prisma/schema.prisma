@@ -454,6 +454,12 @@ model CourseInstance {
   // la fecha de cierre automático aún no haya llegado. Lo togglea
   // admin/bedel desde el cronograma.
   enrollmentClosed Boolean         @default(false)
+  // Override de reapertura manual: cuando el admin reabre una
+  // instancia que el sistema cerró automáticamente (cupo lleno o
+  // fecha de cierre pasada), este flag pasa a true para que el
+  // sistema NO la vuelva a cerrar sola. Persiste hasta que el admin
+  // la cierre manualmente de nuevo.
+  enrollmentForceOpen Boolean      @default(false)
 
   // Auditables específicos
   createdAt DateTime  @default(now())

@@ -46,11 +46,16 @@ export function CourseDetail({ id }: { id: string }) {
   const closeAt = new Date(it.closeAt);
   const closeHoursLeft = (closeAt.getTime() - Date.now()) / 3_600_000;
   const closeUrgent = closeHoursLeft <= 48;
-  // Estado efectivo de inscripción al curso:
-  // - closed: el admin cerró manualmente, o pasó la fecha de cierre.
-  // - waitlistMode: cupo lleno pero waitlist activa → muestra "Lista de espera".
-  // - canEnroll: enroll directo.
-  const closed = it.enrollmentClosed || closeHoursLeft <= 0;
+  // Estado efectivo:
+  //   - El admin puede activar `enrollmentForceOpen` para mantener la
+  //     instancia abierta a la fuerza, sin importar cupo o fecha.
+  //   - Si no hay override, cerrada cuando: cerrada manual, cupo lleno
+  //     o fecha pasada.
+  //   - Si está abierta y hay cupo, "Inscribirme" normal.
+  //   - Si está abierta, cupo lleno y waitlist habilitada, "Lista de
+  //     espera" (botón). (Override no overbookea: si full, sigue full.)
+  const wouldAutoClose = it.enrollmentClosed || closeHoursLeft <= 0;
+  const closed = !it.enrollmentForceOpen && wouldAutoClose;
   const waitlistMode = !closed && it.waitlistEnabled && it.sinVacantes;
   const canEnroll = !closed && !it.sinVacantes;
 

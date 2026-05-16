@@ -156,14 +156,14 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
       title: closing ? "Cerrar inscripciones" : "Reabrir inscripciones",
       description: closing
         ? `Vas a cerrar las inscripciones de ${label}. Nadie más va a poder anotarse hasta que la reabras.`
-        : `Vas a reabrir las inscripciones de ${label}.`,
-      confirmLabel: closing ? "Cerrar inscripciones" : "Reabrir",
+        : `Vas a forzar la reapertura de las inscripciones de ${label}. El sistema NO la volverá a cerrar automáticamente (aunque el cupo se llene o pase la fecha de cierre). Para volver a cerrarla vas a tener que cerrarla manualmente.`,
+      confirmLabel: closing ? "Cerrar inscripciones" : "Reabrir (forzado)",
       variant: closing ? "destructive" : "default",
     });
     if (!ok) return;
     try {
       await setOpenClosed.mutateAsync({ id, closed: closing });
-      toast.success(closing ? "Inscripciones cerradas" : "Inscripciones reabiertas");
+      toast.success(closing ? "Inscripciones cerradas" : "Inscripciones reabiertas (override manual)");
     } catch (e) {
       toast.error("No se pudo actualizar", e instanceof Error ? e.message : undefined);
     }
@@ -223,7 +223,7 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
               }}
               onRestore={() => restore.mutate({ id: it.id })}
               onSeeEnrollments={() => setSeeEnrollmentsFor({ id: it.id, label: `${it.course.abbr} ${it.edition} — ${it.course.name}` })}
-              onToggleOpen={() => toggleOpenClosed(it.id, it.enrollmentClosed, `${it.course.abbr} ${it.edition}`)}
+              onToggleOpen={() => toggleOpenClosed(it.id, computeIsClosed(it), `${it.course.abbr} ${it.edition}`)}
               toggleBusy={setOpenClosed.isPending}
             />
           ))}
@@ -322,6 +322,26 @@ export function CronogramaView({ canRestore }: { canRestore: boolean }) {
 
 type Row = RouterOutputs["instances"]["list"]["items"][number];
 
+/**
+ * Calcula el estado efectivo de cierre de una instancia, combinando:
+ *   - cierre manual (`enrollmentClosed`)
+ *   - cupo lleno
+ *   - fecha de cierre pasada
+ *   - override de reapertura manual (`enrollmentForceOpen`, prioridad
+ *     máxima — fuerza Abierta).
+ *
+ * Idéntica a la lógica del badge dentro de CronogramaRow.
+ */
+function computeIsClosed(it: Row): boolean {
+  const taken = it._count.enrollments;
+  const free = Math.max(0, it.vacancies - taken);
+  const isFull = it.vacancies > 0 && free === 0;
+  const closeAt = new Date(it.startDate.getTime() - it.hoursBeforeClose * 3600_000);
+  const closeAtPassed = closeAt.getTime() <= Date.now();
+  const wouldAutoClose = it.enrollmentClosed || isFull || closeAtPassed;
+  return !it.enrollmentForceOpen && wouldAutoClose;
+}
+
 function CronogramaRow({
   it,
   deleted,
@@ -350,15 +370,20 @@ function CronogramaRow({
 
   const closeAt = new Date(it.startDate.getTime() - it.hoursBeforeClose * 3600_000);
   const hoursToClose = (closeAt.getTime() - Date.now()) / 3_600_000;
-  // Estado real: cerrada cuando (a) el admin la cerró manualmente,
-  // (b) se agotaron las vacantes o (c) la fecha de cierre ya pasó.
-  // "Cierra pronto" es solo un label informativo cuando la instancia
-  // está abierta y el cierre está dentro de las próximas 48hs.
+  // Estado efectivo:
+  //   - Si el admin activó `enrollmentForceOpen` (override de
+  //     reapertura), la instancia es Abierta sin importar nada más.
+  //   - Si no, es Cerrada cuando: (a) cerrada manualmente,
+  //     (b) cupo lleno o (c) fecha de cierre pasada.
+  //   - "Cierra pronto" es informativo: solo si está abierta (sin
+  //     override) y el cierre está dentro de las próximas 48hs.
   const isFull = total > 0 && free === 0;
   const closeAtPassed = hoursToClose <= 0;
-  const isClosed = it.enrollmentClosed || isFull || closeAtPassed;
+  const wouldAutoClose = it.enrollmentClosed || isFull || closeAtPassed;
+  const isClosed = !it.enrollmentForceOpen && wouldAutoClose;
   const isOpen = !isClosed;
-  const isClosingSoon = isOpen && hoursToClose > 0 && hoursToClose <= 48;
+  const isReopened = it.enrollmentForceOpen && wouldAutoClose;
+  const isClosingSoon = isOpen && !it.enrollmentForceOpen && hoursToClose > 0 && hoursToClose <= 48;
   const teacherName = it.teacher ? `${it.teacher.user.firstName ?? ""} ${it.teacher.user.lastName ?? ""}`.trim() : "";
   const araHref = `/api/cronograma/${it.id}/ara.xlsx`;
 
@@ -390,11 +415,13 @@ function CronogramaRow({
         </div>
       </TableCell>
       <TableCell>
-        {isClosed
-          ? <Badge variant="destructive">Cerrada</Badge>
-          : isClosingSoon
-            ? <Badge variant="warning">Cierra pronto</Badge>
-            : <Badge variant="success">Abierta</Badge>}
+        {isClosed && <Badge variant="destructive">Cerrada</Badge>}
+        {!isClosed && isClosingSoon && <Badge variant="warning">Cierra pronto</Badge>}
+        {!isClosed && !isClosingSoon && (
+          isReopened
+            ? <Badge variant="info" title="Reapertura manual: el sistema no la volverá a cerrar automáticamente.">Reabierta</Badge>
+            : <Badge variant="success">Abierta</Badge>
+        )}
       </TableCell>
       <TableCell className="text-sm whitespace-nowrap">{closeAt.toLocaleDateString("es-AR")}</TableCell>
       <TableCell className="text-sm whitespace-nowrap">{it.startDate.toLocaleDateString("es-AR")}</TableCell>
@@ -434,9 +461,9 @@ function CronogramaRow({
               size="icon"
               onClick={onToggleOpen}
               disabled={toggleBusy}
-              title={it.enrollmentClosed ? "Reabrir inscripciones" : "Cerrar inscripciones"}
+              title={isClosed ? "Reabrir inscripciones (override manual)" : "Cerrar inscripciones"}
             >
-              {it.enrollmentClosed ? <LockOpen className="h-4 w-4 text-success" /> : <Lock className="h-4 w-4" />}
+              {isClosed ? <LockOpen className="h-4 w-4 text-success" /> : <Lock className="h-4 w-4" />}
             </Button>
             {it.waitlistEnabled && (
               <Link href={`/cronograma/${it.id}/lista-espera`}>

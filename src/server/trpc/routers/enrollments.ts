@@ -103,10 +103,20 @@ export const enrollmentsRouter = router({
         // intenten enrolar al mismo curso hasta que esta commiteé.
         await tx.$queryRaw`SELECT id FROM CourseInstance WHERE id = ${inst.id} FOR UPDATE`;
 
-        // Cierre manual de inscripciones (toggleado por admin/bedel).
+        // Cierre efectivo: manual o automático (cupo lleno / fecha
+        // pasada). El admin puede activar el override `enrollmentForceOpen`
+        // para reabrir manualmente; mientras esté en true, ignoramos
+        // los chequeos de cierre automático. El chequeo de cupo lo
+        // hace la lógica de vacancies más abajo (no se overbookea).
         const fresh = await tx.courseInstance.findUniqueOrThrow({ where: { id: inst.id } });
-        if (fresh.enrollmentClosed) {
-          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inscripciones cerradas para esta instancia." });
+        if (!fresh.enrollmentForceOpen) {
+          const closeAt = new Date(fresh.startDate.getTime() - fresh.hoursBeforeClose * 3600_000);
+          if (fresh.enrollmentClosed) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inscripciones cerradas para esta instancia." });
+          }
+          if (closeAt.getTime() <= Date.now()) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El plazo de inscripción ya finalizó." });
+          }
         }
 
         // Re-chequeos DENTRO de la sección crítica para evitar race conditions.
@@ -215,7 +225,15 @@ export const enrollmentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const inst = await ctx.db.courseInstance.findFirstOrThrow({ where: { id: input.instanceId, deletedAt: null } });
       if (!inst.waitlistEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Lista de espera no habilitada." });
-      if (inst.enrollmentClosed) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inscripciones cerradas para esta instancia." });
+      if (!inst.enrollmentForceOpen) {
+        const closeAt = new Date(inst.startDate.getTime() - inst.hoursBeforeClose * 3600_000);
+        if (inst.enrollmentClosed) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Inscripciones cerradas para esta instancia." });
+        }
+        if (closeAt.getTime() <= Date.now()) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El plazo de inscripción ya finalizó." });
+        }
+      }
 
       // La lista de espera solo se habilita cuando el cupo está completo.
       const taken = await ctx.db.enrollment.count({

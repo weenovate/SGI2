@@ -44,13 +44,15 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (!inst) return new NextResponse("Not found", { status: 404 });
 
   // Misma lógica de cierre que el UI: manual, cupo lleno o fecha
-  // pasada. La planilla ARA solo se entrega cuando la instancia
-  // efectivamente cerró sus inscripciones.
+  // pasada — con el override `enrollmentForceOpen` que la fuerza a
+  // permanecer abierta. La planilla ARA solo se entrega cuando la
+  // instancia efectivamente cerró sus inscripciones.
   const taken = inst.enrollments.length;
   const isFull = inst.vacancies > 0 && taken >= inst.vacancies;
   const closeAt = new Date(inst.startDate.getTime() - inst.hoursBeforeClose * 3600_000);
   const closeAtPassed = closeAt.getTime() <= Date.now();
-  const isClosed = inst.enrollmentClosed || isFull || closeAtPassed;
+  const wouldAutoClose = inst.enrollmentClosed || isFull || closeAtPassed;
+  const isClosed = !inst.enrollmentForceOpen && wouldAutoClose;
   if (!isClosed) {
     return new NextResponse("La planilla solo está disponible cuando la instancia está cerrada.", { status: 409 });
   }
